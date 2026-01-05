@@ -1,0 +1,68 @@
+package com.aura.data
+
+import kotlinx.coroutines.flow.Flow
+import javax.inject.Inject
+import javax.inject.Singleton
+
+interface NotificationRepository {
+    fun getRulesForProfile(profileId: String): Flow<List<AppRuleEntity>>
+
+
+    suspend fun getRuleForPackage(packageName: String): AppRuleEntity?
+    suspend fun getRule(packageName: String, profileId: String): AppRuleEntity?
+    suspend fun updateRule(rule: AppRuleEntity)
+    
+    suspend fun logNotification(notification: NotificationEntity)
+    fun getBlockedNotifications(): Flow<List<NotificationEntity>>
+    fun getBlockedNotificationsForPackage(packageName: String): Flow<List<NotificationEntity>>
+    suspend fun clearNotificationsForPackage(packageName: String)
+    suspend fun clearAllBlocked()
+    
+    fun getAllNotifications(): Flow<List<NotificationEntity>>
+}
+
+@Singleton
+class NotificationRepositoryImpl @Inject constructor(
+    private val notificationDao: NotificationDao,
+    private val appRuleDao: AppRuleDao,
+    private val focusModeManager: FocusModeManager
+) : NotificationRepository {
+
+    override fun getRulesForProfile(profileId: String): Flow<List<AppRuleEntity>> = 
+        appRuleDao.getRulesForProfile(profileId)
+    
+
+
+    override suspend fun getRuleForPackage(packageName: String): AppRuleEntity? {
+        // Get current profile
+        val currentProfile = focusModeManager.getMode().name
+        return appRuleDao.getRule(packageName, currentProfile)
+    }
+
+    override suspend fun getRule(packageName: String, profileId: String): AppRuleEntity? {
+        return appRuleDao.getRule(packageName, profileId)
+    }
+
+    override suspend fun updateRule(rule: AppRuleEntity) {
+        appRuleDao.insertOrUpdate(rule)
+    }
+
+    override suspend fun logNotification(notification: NotificationEntity) {
+        notificationDao.insert(notification)
+    }
+
+    override fun getBlockedNotifications(): Flow<List<NotificationEntity>> = notificationDao.getBlockedNotifications()
+
+    override fun getBlockedNotificationsForPackage(packageName: String): Flow<List<NotificationEntity>> =
+        notificationDao.getBlockedNotificationsForPackage(packageName)
+
+    override suspend fun clearNotificationsForPackage(packageName: String) {
+        notificationDao.clearNotificationsForPackage(packageName)
+    }
+
+    override suspend fun clearAllBlocked() {
+        notificationDao.clearAllBlocked()
+    }
+
+    override fun getAllNotifications(): Flow<List<NotificationEntity>> = notificationDao.getAllNotifications()
+}
