@@ -17,16 +17,9 @@ class FocusModeManager @Inject constructor(
 ) {
     private val prefs: SharedPreferences = context.getSharedPreferences("aura_focus_prefs", Context.MODE_PRIVATE)
 
-    fun getMode(): FocusMode {
-        val name = prefs.getString("current_mode", FocusMode.FOCUS.name) ?: FocusMode.FOCUS.name
-        return try {
-            FocusMode.valueOf(name)
-        } catch (e: Exception) {
-            FocusMode.FOCUS
-        }
-    }
+    fun getMode(): FocusMode = FocusMode.FOCUS
 
     fun setMode(mode: FocusMode) {
-        prefs.edit().putString("current_mode", mode.name).apply()
+        // No-op in single profile mode
     }
 }

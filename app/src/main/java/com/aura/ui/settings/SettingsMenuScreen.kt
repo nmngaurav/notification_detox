@@ -68,7 +68,8 @@ fun SettingsMenuScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             
-            // Section 1: Shield
+            // Section 1: Shield - REMOVED per user feedback (Accessed via Dashboard)
+            /*
             item {
                 MenuSectionTitle("Shield Configuration")
                 Spacer(modifier = Modifier.height(8.dp))
@@ -80,6 +81,7 @@ fun SettingsMenuScreen(
                     onClick = { navController.navigate("shield_control") }
                 )
             }
+            */
             
             // Section 2: Support
             item {

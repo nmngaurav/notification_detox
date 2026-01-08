@@ -20,4 +20,7 @@ interface AppRuleDao {
 
     @Query("SELECT * FROM app_rules")
     fun getAllRulesRaw(): Flow<List<AppRuleEntity>>
+
+    @Query("DELETE FROM app_rules WHERE packageName = :packageName AND profileId = :profileId")
+    suspend fun deleteRule(packageName: String, profileId: String)
 }

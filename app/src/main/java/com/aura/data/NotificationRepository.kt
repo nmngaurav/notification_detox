@@ -11,6 +11,7 @@ interface NotificationRepository {
     suspend fun getRuleForPackage(packageName: String): AppRuleEntity?
     suspend fun getRule(packageName: String, profileId: String): AppRuleEntity?
     suspend fun updateRule(rule: AppRuleEntity)
+    suspend fun deleteRule(packageName: String, profileId: String)
     
     suspend fun logNotification(notification: NotificationEntity)
     fun getBlockedNotifications(): Flow<List<NotificationEntity>>
@@ -19,6 +20,7 @@ interface NotificationRepository {
     suspend fun clearAllBlocked()
     
     fun getAllNotifications(): Flow<List<NotificationEntity>>
+    fun getAllRules(): Flow<List<AppRuleEntity>>
 }
 
 @Singleton
@@ -47,6 +49,10 @@ class NotificationRepositoryImpl @Inject constructor(
         appRuleDao.insertOrUpdate(rule)
     }
 
+    override suspend fun deleteRule(packageName: String, profileId: String) {
+        appRuleDao.deleteRule(packageName, profileId)
+    }
+
     override suspend fun logNotification(notification: NotificationEntity) {
         notificationDao.insert(notification)
     }
@@ -65,4 +71,6 @@ class NotificationRepositoryImpl @Inject constructor(
     }
 
     override fun getAllNotifications(): Flow<List<NotificationEntity>> = notificationDao.getAllNotifications()
+
+    override fun getAllRules(): Flow<List<AppRuleEntity>> = appRuleDao.getAllRulesRaw()
 }

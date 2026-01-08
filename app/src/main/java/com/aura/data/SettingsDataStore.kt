@@ -21,6 +21,18 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
     companion object {
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val USER_MODE = stringPreferencesKey("user_mode")
+        val OPENAI_API_KEY = stringPreferencesKey("openai_api_key")
+    }
+
+    val apiKey: Flow<String?> = context.dataStore.data
+        .map { preferences ->
+            preferences[OPENAI_API_KEY]
+        }
+
+    suspend fun setApiKey(key: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OPENAI_API_KEY] = key
+        }
     }
 
     val isOnboardingCompleted: Flow<Boolean> = context.dataStore.data

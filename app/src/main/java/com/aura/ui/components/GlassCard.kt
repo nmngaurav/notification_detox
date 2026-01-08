@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 fun GlassCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 16.dp,
+    backgroundColor: Color? = null,
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
@@ -30,6 +31,9 @@ fun GlassCard(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
+            .background(
+                color = backgroundColor ?: Color.Transparent
+            )
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(

@@ -21,6 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Star
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.aura.data.ShieldLevel
@@ -35,11 +38,12 @@ fun ShieldControlScreen(
 ) {
     val rules by viewModel.rules.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
+    var selectedRule by remember { mutableStateOf<com.aura.data.AppRuleEntity?>(null) }
     
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Manage Shield") },
+                title = { Text("Smart Filter Center") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -57,46 +61,45 @@ fun ShieldControlScreen(
                 onClick = { navController.navigate("app_selection/$selectedProfile") },
                 containerColor = Color(0xFFDAA520)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Shield", tint = Color.Black)
+                Icon(Icons.Default.Add, contentDescription = "Add to Detox", tint = Color.Black)
             }
         },
         containerColor = Color(0xFF0A0A0A)
     ) { padding ->
+        // Modal Sheet for Config
+        if (selectedRule != null) {
+            val appInfo = viewModel.getAppInfo(selectedRule!!.packageName)
+            AppConfigSheet(
+                appName = appInfo.label,
+                packageName = selectedRule!!.packageName,
+                icon = appInfo.icon,
+                currentShieldLevel = selectedRule!!.shieldLevel,
+                initialCategories = selectedRule!!.activeCategories,
+                keywords = selectedRule!!.customKeywords,
+                onSave = { level, categories, keywords ->
+                    viewModel.updateSmartRule(selectedRule!!.packageName, selectedProfile, categories, keywords)
+                    selectedRule = null
+                },
+                onRemove = {
+                    viewModel.deleteRule(selectedRule!!.packageName, selectedProfile)
+                    selectedRule = null
+                },
+                onDismiss = { selectedRule = null }
+            )
+        }
+
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
             
-            // Profile Tabs
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .background(Color(0xFF1E1E1E), RoundedCornerShape(12.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ProfileTab(
-                    title = "Focus Mode",
-                    isSelected = selectedProfile == "FOCUS",
-                    onClick = { viewModel.setProfile("FOCUS") }
-                )
-                ProfileTab(
-                    title = "Relax Mode",
-                    isSelected = selectedProfile == "RELAX",
-                    onClick = { viewModel.setProfile("RELAX") }
-                )
-            }
-
             if (rules.isEmpty()) {
-                EmptyState()
+                EmptyState(navController, selectedProfile)
             } else {
                 // Group Rules
-                // Group Rules (Optimized)
                 val blockedRules by remember(rules) { derivedStateOf { rules.filter { it.shieldLevel == ShieldLevel.FORTRESS } } }
                 val smartRules by remember(rules) { derivedStateOf { rules.filter { it.shieldLevel == ShieldLevel.SMART } } }
-                val allowedRules by remember(rules) { derivedStateOf { rules.filter { it.shieldLevel == ShieldLevel.OPEN } } }
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -105,51 +108,29 @@ fun ShieldControlScreen(
                 ) {
                     // Blocked Section
                     if (blockedRules.isNotEmpty()) {
-                        stickyHeader { SectionHeader("Blocked", Color(0xFFEF5350), blockedRules.size) }
+                        stickyHeader { SectionHeader("Blocked Forever", Color(0xFFEF5350), blockedRules.size) }
                         items(blockedRules, key = { it.packageName }) { rule ->
-                            RuleItem(rule, viewModel, selectedProfile, Modifier.animateItemPlacement())
+                            RuleItem(rule, viewModel, selectedProfile, onClick = { selectedRule = rule }, Modifier.animateItemPlacement())
                         }
                     }
 
                     // Smart Section
                     if (smartRules.isNotEmpty()) {
-                        stickyHeader { SectionHeader("Smart Filtered", Color(0xFFDAA520), smartRules.size) }
+                        stickyHeader { SectionHeader("Smart Detox Active", Color(0xFFDAA520), smartRules.size) }
                         items(smartRules, key = { it.packageName }) { rule ->
-                            RuleItem(rule, viewModel, selectedProfile, Modifier.animateItemPlacement())
+                            RuleItem(rule, viewModel, selectedProfile, onClick = { selectedRule = rule }, Modifier.animateItemPlacement())
                         }
                     }
 
-                    // Allowed Section (Collapsed by default logic or just shown)
-                    if (allowedRules.isNotEmpty()) {
-                        stickyHeader { SectionHeader("Allowed", Color(0xFF4CAF50), allowedRules.size) }
-                        items(allowedRules, key = { it.packageName }) { rule ->
-                            RuleItem(rule, viewModel, selectedProfile, Modifier.animateItemPlacement())
-                        }
-                    }
                 }
             }
         }
     }
 }
 
-@Composable
-fun ProfileTab(title: String, isSelected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isSelected) Color(0xFFDAA520) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = title,
-            color = if (isSelected) Color.Black else Color.Gray,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleSmall
-        )
-    }
-}
+// ... (Sub-components update) ...
+
+
 
 @Composable
 fun SectionHeader(title: String, color: Color, count: Int) {
@@ -173,14 +154,14 @@ fun RuleItem(
     rule: com.aura.data.AppRuleEntity,
     viewModel: SettingsViewModel,
     profileId: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val appInfo = viewModel.getAppInfo(rule.packageName)
-    var showDialog by remember { mutableStateOf(false) }
     
     GlassCard(
         modifier = modifier.fillMaxWidth().padding(vertical = 4.dp),
-        onClick = { showDialog = true }
+        onClick = onClick
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,158 +182,88 @@ fun RuleItem(
                 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(appInfo.label, color = Color.White, fontWeight = FontWeight.Bold)
-                    if (rule.filterTemplate != com.aura.data.FilterTemplate.NONE && rule.shieldLevel == ShieldLevel.SMART) {
-                        Text(
-                            "Smart: ${rule.filterTemplate.displayName}",
-                            color = Color(0xFFDAA520),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    } else if (rule.customKeywords.isNotEmpty()) {
-                         Text(
-                            "Custom Rules: ${rule.customKeywords.take(20)}...",
-                            color = Color(0xFFDAA520),
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                    val filterDesc = when (rule.shieldLevel) {
+                        ShieldLevel.SMART -> {
+                            val cats = rule.activeCategories.split(",").filter { it.isNotEmpty() }
+                            if (cats.isEmpty()) "Smart Detox Active"
+                            else "Smart: ${cats.joinToString(", ")}"
+                        }
+                        ShieldLevel.FORTRESS -> "Blocked Forever"
+                        else -> "Always Allowed"
                     }
+                    Text(
+                        text = filterDesc,
+                        color = Color(0xFFDAA520),
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 
-                Icon(Icons.Default.Settings, contentDescription = "Edit", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Settings, contentDescription = "Edit", tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 IconButton(
-                    onClick = { viewModel.updateRule(rule.packageName, profileId, ShieldLevel.NONE) },
+                    onClick = { viewModel.deleteRule(rule.packageName, profileId) },
                     modifier = Modifier.size(24.dp)
                 ) {
                     Icon(Icons.Default.Clear, contentDescription = "Remove", tint = Color(0xFFEF5350))
                 }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            ShieldSlider(
-                currentLevel = rule.shieldLevel,
-                onLevelChange = { newLevel ->
-                    viewModel.updateRule(rule.packageName, profileId, newLevel)
-                }
-            )
         }
-    }
-    
-    if (showDialog) {
-        SmartConfigDialog(
-            appLabel = appInfo.label,
-            currentRule = rule,
-            onDismiss = { showDialog = false },
-            onSave = { template, keywords ->
-                viewModel.updateSmartRule(rule.packageName, profileId, template, keywords)
-                showDialog = false
-            }
-        )
     }
 }
 
-@Composable
-fun SmartConfigDialog(
-    appLabel: String,
-    currentRule: com.aura.data.AppRuleEntity,
-    onDismiss: () -> Unit,
-    onSave: (com.aura.data.FilterTemplate, String) -> Unit
-) {
-    var selectedTemplate by remember { mutableStateOf(currentRule.filterTemplate) }
-    var keywords by remember { mutableStateOf(currentRule.customKeywords) }
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1E1E1E),
-        title = { Text("Configure $appLabel", color = Color.White) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Template Selector
-                Text("Smart Filter Type", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                
-                // Simple dropdown or radio replacement for simplicity
-                val templates = com.aura.data.FilterTemplate.values()
-                templates.forEach { template ->
-                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedTemplate = template }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = (selectedTemplate == template),
-                            onClick = { selectedTemplate = template },
-                            colors = RadioButtonDefaults.colors(selectedColor = Color(0xFFDAA520))
-                        )
-                        Text(template.displayName, color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                
-                Divider(color = Color.DarkGray)
-                
-                // Keywords Input
-                Text("Always Allow Keywords", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                OutlinedTextField(
-                    value = keywords,
-                    onValueChange = { keywords = it },
-                    placeholder = { Text("e.g. otp, emergency, salary") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        cursorColor = Color(0xFFDAA520),
-                        focusedBorderColor = Color(0xFFDAA520),
-                        unfocusedBorderColor = Color.Gray
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "Notifications containing these words will pass through the Smart Shield.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(selectedTemplate, keywords) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDAA520))
-            ) {
-                Text("Save", color = Color.Black)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color.Gray)
-            }
-        }
-    )
-}
 
 @Composable
-fun EmptyState() {
+fun EmptyState(navController: NavController, profileId: String) {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.Add,
-            contentDescription = null,
-            tint = Color(0xFF333333),
-            modifier = Modifier.size(100.dp)
-        )
-        Spacer(modifier = Modifier.height(24.dp))
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .background(Color(0xFFDAA520).copy(alpha = 0.05f), CircleShape)
+                .border(2.dp, Color(0xFFDAA520).copy(alpha = 0.1f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = null,
+                tint = Color(0xFFDAA520).copy(alpha = 0.4f),
+                modifier = Modifier.size(64.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
         Text(
-            "Shield is Inactive",
+            "No Apps Filtered",
             color = Color.White,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
         Text(
-            "Add apps to start reclaiming your focus.",
+            "Add apps to start blocking unwanted notifications.",
             color = Color.Gray,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            lineHeight = 22.sp
         )
+        
+        Spacer(modifier = Modifier.height(40.dp))
+        
+        Button(
+            onClick = { navController.navigate("app_selection/$profileId") },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDAA520), contentColor = Color.Black),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.height(56.dp).fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Add, null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Select Apps", fontWeight = FontWeight.Bold)
+        }
     }
 }

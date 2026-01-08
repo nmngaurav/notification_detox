@@ -42,90 +42,31 @@ fun AppSelectionScreen(
         }
     }
 
-    var showRuleDialogForPackage by remember { mutableStateOf<String?>(null) }
-    
-    // Status color for displaying current status if possible?
-    // For now just listing all apps to add.
+    // Config Sheet State
+    var selectedForConfig by remember { mutableStateOf<com.aura.util.AppInfoManager.AppInfo?>(null) }
 
-    // Custom Rule Dialog
-    if (showRuleDialogForPackage != null) {
-        val packageName = showRuleDialogForPackage!!
-        val appName = installedApps.find { it.packageName == packageName }?.label ?: packageName
+    // Custom Rule Config Sheet
+    if (selectedForConfig != null) {
+        val app = selectedForConfig!!
         
-        AlertDialog(
-            onDismissRequest = { showRuleDialogForPackage = null },
-            containerColor = Color(0xFF1E1E1E),
-            title = { 
-                Text(
-                    text = "Add $appName",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                ) 
+        // Use default SMART level for new apps
+        com.aura.ui.settings.AppConfigSheet(
+            appName = app.label,
+            packageName = app.packageName,
+            icon = app.icon,
+            currentShieldLevel = ShieldLevel.SMART,
+            initialCategories = "",
+            keywords = "", 
+            onSave = { level, categories, keywords ->
+                viewModel.updateSmartRule(app.packageName, profileId, categories, keywords)
+                selectedForConfig = null
+                navController.popBackStack()
             },
-            text = {
-                Column {
-                    Text(
-                        "How should Aura handle this app in $profileId mode?", 
-                        color = Color(0xFFAAAAAA),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    // Smart Shield (Recommended)
-                    Button(
-                        onClick = { 
-                            viewModel.updateRule(packageName, profileId, ShieldLevel.SMART)
-                            showRuleDialogForPackage = null
-                            navController.popBackStack() // Go back after adding? Or stay to add more? Stay is better flow.
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDAA520)),
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { 
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Smart Shield (AI)", fontWeight = FontWeight.Bold, color = Color.Black)
-                            Text("Best for messaging & social", style = MaterialTheme.typography.labelSmall, color = Color.Black.copy(alpha = 0.7f))
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Block Always
-                    Button(
-                        onClick = { 
-                            viewModel.updateRule(packageName, profileId, ShieldLevel.FORTRESS)
-                            showRuleDialogForPackage = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350)),
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { 
-                         Text("Block Entirely", fontWeight = FontWeight.Bold)
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Allow Always
-                    OutlinedButton(
-                        onClick = { 
-                            viewModel.updateRule(packageName, profileId, ShieldLevel.OPEN)
-                            showRuleDialogForPackage = null
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF4CAF50)),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50)),
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { 
-                        Text("Allow Always") 
-                    }
-                }
+            onRemove = {
+                viewModel.deleteRule(app.packageName, profileId)
+                selectedForConfig = null
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showRuleDialogForPackage = null }) {
-                    Text("Cancel", color = Color.Gray)
-                }
-            }
+            onDismiss = { selectedForConfig = null }
         )
     }
 
@@ -144,7 +85,7 @@ fun AppSelectionScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                     Text(
-                        text = "Add App to Shield",
+                        text = "Add App Filter",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
@@ -189,7 +130,7 @@ fun AppSelectionScreen(
                 GlassCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showRuleDialogForPackage = app.packageName },
+                        .clickable { selectedForConfig = app },
                     cornerRadius = 16.dp
                     // Note: GlassCard inside clickable vs clickable inside GlassCard. 
                     // Let's rely on standard clickable above.

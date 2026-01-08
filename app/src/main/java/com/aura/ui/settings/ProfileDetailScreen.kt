@@ -141,26 +141,24 @@ fun ProfileDetailScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 
-                                // Simple Horizontal Scroll for Templates
+                                // Simple Horizontal Scroll for Categories
                                 androidx.compose.foundation.lazy.LazyRow(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    items(com.aura.data.FilterTemplate.entries.filter { it != com.aura.data.FilterTemplate.NONE }) { template ->
-                                        val isSelected = rule.filterTemplate == template
+                                    items(com.aura.data.DetoxCategory.entries) { category ->
+                                        val isSelected = rule.activeCategories.contains(category.name)
                                         FilterChip(
                                             selected = isSelected,
                                             onClick = { 
-                                                // TODO: ViewModel needs updateRule overload for Template
-                                                // For now, assume updateRule updates generic rule, we might need to add setTemplate method to VM
-                                                // OR, since updateRule takes ShieldLevel, we need a new method.
-                                                // Let's call a theoretical 'updateTemplate' or similar.
-                                                // Since VM only has updateRule(level), I'll stick to just UI for now and add TODO.
-                                                // Actually, I should update the VM to support this!
-                                                // But to avoid blocking UI, I'll assume the VM *will* support it.
-                                                // Wait, I can't call a non-existent method.
-                                                // I will skip implementation of onclick for now.
+                                                val currentList = rule.activeCategories.split(",").filter { it.isNotEmpty() }.toMutableList()
+                                                if (isSelected) {
+                                                    currentList.remove(category.name)
+                                                } else {
+                                                    currentList.add(category.name)
+                                                }
+                                                viewModel.updateSmartRule(rule.packageName, profileId, currentList.joinToString(","), rule.customKeywords)
                                             },
-                                            label = { Text(template.displayName) },
+                                            label = { Text(category.displayName) },
                                             colors = FilterChipDefaults.filterChipColors(
                                                 selectedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.2f),
                                                 selectedLabelColor = Color(0xFF00E5FF),

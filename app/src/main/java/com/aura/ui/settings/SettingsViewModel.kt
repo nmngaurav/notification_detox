@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aura.billing.BillingManager
 import com.aura.data.AppRuleEntity
-import com.aura.data.FilterTemplate
+import com.aura.data.DetoxCategory
 import com.aura.data.NotificationRepository
 import com.aura.data.ShieldLevel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,17 +31,16 @@ class SettingsViewModel @Inject constructor(
     val selectedProfile = _selectedProfile.asStateFlow()
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val rules = _selectedProfile.flatMapLatest { profile ->
-        repository.getRulesForProfile(profile)
-            .map { list -> 
-                list.sortedBy { rule -> 
-                    appInfoManager.getAppInfo(rule.packageName).label.lowercase() 
-                } 
-            }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val rules = repository.getRulesForProfile("FOCUS")
+        .map { list -> 
+            list.sortedBy { rule -> 
+                appInfoManager.getAppInfo(rule.packageName).label.lowercase() 
+            } 
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setProfile(profileId: String) {
-        _selectedProfile.value = profileId
+        // No-op V3
     }
 
 
@@ -61,24 +60,28 @@ class SettingsViewModel @Inject constructor(
 
     fun getAppInfo(packageName: String) = appInfoManager.getAppInfo(packageName)
 
-    fun updateRule(packageName: String, profileId: String, level: ShieldLevel) {
+    fun updateRule(packageName: String, profileId: String, level: ShieldLevel, keywords: String = "") {
         viewModelScope.launch {
-            // Fetch existing rule for the SPECIFIC profile to preserve fields
+            // Fetch existing to preserve other fields if needed, or overwrite
              val existing = repository.getRule(packageName, profileId)
              repository.updateRule(
                 AppRuleEntity(
                     packageName = packageName, 
                     profileId = profileId, 
                     shieldLevel = level, 
-                    filterTemplate = existing?.filterTemplate ?: FilterTemplate.NONE, 
-                    customKeywords = existing?.customKeywords ?: "",
+                    filterTemplate = existing?.filterTemplate ?: DetoxCategory.SOCIAL, 
+                    activeCategories = existing?.activeCategories ?: "",
                     lastUpdated = System.currentTimeMillis()
                 )
             )
         }
     }
 
-    fun updateSmartRule(packageName: String, profileId: String, template: FilterTemplate, keywords: String) {
+    fun updateRule(packageName: String, profileId: String, level: ShieldLevel) {
+        updateRule(packageName, profileId, level, "")
+    }
+
+    fun updateSmartRule(packageName: String, profileId: String, categories: String, keywords: String) {
         viewModelScope.launch {
              // Ensure we are updating the rule for the correct profile
              repository.updateRule(
@@ -86,11 +89,17 @@ class SettingsViewModel @Inject constructor(
                     packageName = packageName, 
                     profileId = profileId, 
                     shieldLevel = ShieldLevel.SMART, // Force smart if configuring smart
-                    filterTemplate = template, 
+                    activeCategories = categories, 
                     customKeywords = keywords,
                     lastUpdated = System.currentTimeMillis()
                 )
             )
+        }
+    }
+
+    fun deleteRule(packageName: String, profileId: String) {
+        viewModelScope.launch {
+            repository.deleteRule(packageName, profileId)
         }
     }
 }

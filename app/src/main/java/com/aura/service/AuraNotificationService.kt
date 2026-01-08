@@ -7,7 +7,7 @@ import android.util.Log
 import com.aura.ai.ClassificationHelper
 import com.aura.data.NotificationEntity
 import com.aura.data.NotificationRepository
-import com.aura.util.ContactUtils
+
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +19,8 @@ import javax.inject.Inject
 class AuraNotificationService : NotificationListenerService() {
 
     @Inject lateinit var repository: NotificationRepository
-    @Inject lateinit var contactUtils: ContactUtils
+
+
     @Inject lateinit var classifier: ClassificationHelper
     @Inject lateinit var heuristicEngine: com.aura.ai.HeuristicEngine
     @Inject lateinit var focusModeManager: com.aura.data.FocusModeManager
@@ -53,15 +54,21 @@ class AuraNotificationService : NotificationListenerService() {
             extras.getString(Notification.EXTRA_TEXT) ?: ""
         }
         
+        val isGroupConversation = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION)
+        } else {
+            // Header-based heuristic for older Androids
+            title.contains(":") || title.contains("group", ignoreCase = true)
+        }
+
         scope.launch {
-            // 0. Check Significant Contacts (System-level VIPs)
-            if (contactUtils.isSignificantContact(title)) {
-                 return@launch
+            // ... (Ongoing check lines 61-65 skipped in replace, assuming context matches) 
+            
+            if (sbn.isOngoing || !sbn.isClearable) {
+                return@launch
             }
 
             // 1. Configured Apps Only Logic
-            // If no rule exists for this app in the active profile (or fallback), we Allow it (OPEN).
-            // This ensures only "configured" apps are touched by the shield.
             val ruleEntity = repository.getRuleForPackage(packageName)
             if (ruleEntity == null) {
                  Log.v("AuraService", "No rule for $packageName - Allowing passthrough.")
@@ -69,76 +76,150 @@ class AuraNotificationService : NotificationListenerService() {
             }
 
             val shieldLevel = ruleEntity.shieldLevel
-            val filterTemplate = ruleEntity.filterTemplate
-            val customKeywords = ruleEntity.customKeywords
-            val activeMode = focusModeManager.getMode()
+            val activeTags = ruleEntity.activeCategories.split(",").filter { it.isNotEmpty() }.toSet()
+            val customRules = ruleEntity.customKeywords.lowercase()
             
-            // 2. Shield Logic
-            val shouldBlock = when (shieldLevel) {
-                com.aura.data.ShieldLevel.OPEN -> false // Always Allow
-                com.aura.data.ShieldLevel.FORTRESS -> true // Always Block
-                com.aura.data.ShieldLevel.SMART -> {
-                     // 2.1 Custom Keyword Override (Super Priority)
-                     // If user explicitly said "Allow 'salary'" or "Block 'sale'", respect it instantly.
-                     if (customKeywords.isNotEmpty()) {
-                         val lowerTitle = title.lowercase()
-                         val lowerContent = content.lowercase()
-                         val keywords = customKeywords.lowercase().split(",").map { it.trim() }
-                         
-                         // Check for ALLOW matches (e.g. "urgent, otp")
-                         // TODO: We need a way to distinguish Allow vs Block keywords. 
-                         // For now, let's assume custom keywords are "Always Allow" overrides for Smart Mode.
-                         if (keywords.any { it.isNotEmpty() && (lowerTitle.contains(it) || lowerContent.contains(it)) }) {
-                             false // Allow
-                         } else {
-                             // Proceed to AI
-                             performSmartCheck(title, content, packageName, filterTemplate, activeMode)
-                         }
-                     } else {
-                         performSmartCheck(title, content, packageName, filterTemplate, activeMode)
-                     }
-                }
-                com.aura.data.ShieldLevel.NONE -> false
+            // TIER 1 & 2: Explicit Allowlist (Tags & Keywords)
+            val (isAllowedByTag, tagReason) = checkTagsAndRules(title, content, packageName, activeTags, customRules, isGroupConversation)
+            
+            if (isAllowedByTag) {
+                Log.d("AuraService", "Allowed by Tag/Rule: $tagReason")
+                return@launch
             }
-
-            // Save to DB ONLY if blocked (Smart Logging)
-            if (shouldBlock) {
-                 // URGENT RESCUE CHECK
-                 // Even if blocked by rule, if it looks critical, we alert the user via Aura.
-                 val isUrgentInfo = heuristicEngine.fastClassify(packageName, title, content)
-                 if (isUrgentInfo == "urgent") {
-                     triggerRescueNotification(packageName, title)
-                 }
-                
-                 // FIX: Only log individual notifications to avoid double counting (Summary + Child).
-                 // We still cancel/block the summary so it doesn't leak.
-                 if (!isGroupSummary) {
-                     repository.logNotification(
-                        NotificationEntity(
-                            packageName = packageName,
-                            title = title,
-                            content = content,
-                            timestamp = System.currentTimeMillis(),
-                            category = classifier.classify(title, content, packageName),
-                            isBlocked = true
-                        )
+            
+            // If we are here, it is NOT explicitly allowed.
+            // DEFAULT: BLOCK.
+            // But before blocking, we run TIER 3: AI RESCUE.
+            
+            // TIER 3: AI Context Rescue (The Safety Net)
+            // We ask AI: "Is this CRITICAL?"
+            val aiVerdict = classifier.classify(title, content, packageName)
+            
+            if (aiVerdict == com.aura.ai.HeuristicEngine.CAT_CRITICAL) {
+                // RESCUE!
+                triggerRescueNotification(packageName, title) // Optional: Badge it?
+                Log.d("AuraService", "RESCUED by AI: $title (Critical)")
+                return@launch
+            }
+            
+            // FINAL VERDICT: BLOCK
+            // Log it for the user to see in their timeline
+            Log.d("AuraService", "Blocked by Default: $title (AI Verdict: $aiVerdict)")
+            
+            if (!isGroupSummary) {
+                repository.logNotification(
+                    NotificationEntity(
+                        packageName = packageName,
+                        title = title,
+                        content = content,
+                        timestamp = System.currentTimeMillis(),
+                        category = aiVerdict,
+                        isBlocked = true
                     )
-                 }
-                cancelNotification(sbn.key)
-                Log.d("AuraService", "Blocked notification from $packageName: $title")
-            } else {
-                // If allowed, we do NOT log it to the Aura DB. 
-                // It appears in the system tray naturally.
-                Log.d("AuraService", "Allowed notification from $packageName")
+                )
             }
+            cancelNotification(sbn.key)
         }
     }
 
+    // Helper: V8 Checks (Regex/Heuristic)
+    private fun checkTagsAndRules(
+        title: String, 
+        content: String, 
+        packageName: String, 
+        tags: Set<String>, 
+        customRules: String,
+        isGroupConversation: Boolean
+    ): Pair<Boolean, String> {
+        val lowerTitle = title.lowercase()
+        val lowerContent = content.lowercase()
+        val combined = "$lowerTitle $lowerContent"
+
+        // 1. Custom Keywords (Tier 2 - User Defined)
+        if (customRules.isNotEmpty()) {
+            val rules = customRules.split(",").map { it.trim() }
+            if (rules.any { it.isNotEmpty() && combined.contains(it) }) {
+                return true to "Custom Rule"
+            }
+        }
+        
+        if (tags.isEmpty()) return false to ""
+
+        // --- SECURITY & CRITICAL ---
+        if (tags.contains("OTPs") || tags.contains("Login Codes")) {
+            if (combined.contains("otp") || combined.contains("code") || combined.contains("verification") || combined.contains("password") || combined.contains("reset")) return true to "Security"
+        }
+        if (tags.contains("Calls")) {
+            if (combined.contains("call") || combined.contains("voice") || combined.contains("video") || combined.contains("missed")) return true to "Call"
+        }
+        if (tags.contains("Alarms") || tags.contains("Fraud Alerts")) {
+             if (combined.contains("alarm") || combined.contains("alert") || combined.contains("fraud") || combined.contains("suspicious")) return true to "Alarm/Fraud"
+        }
+
+        // --- SOCIAL & CHAT (Advanced Group Logic) ---
+        // Mentions (@) & Replies work in BOTH DMs and Groups
+        if (tags.contains("Mentions") || tags.contains("Replies")) {
+             if (combined.contains("@") || combined.contains("replied") || combined.contains("reply")) return true to "Mention/Reply"
+        }
+        
+        // DMs (Strictly 1-on-1)
+        if (tags.contains("DMs")) {
+            // IF isGroupConversation is FALSE -> It's a DM -> Allow
+            // IF isGroupConversation is TRUE -> It's a Group -> Ignore [DM] tag (Must rely on [Group Chats] or [Mentions])
+            if (!isGroupConversation) {
+                // Heuristic confirmation for API < 28 or raw apps
+                val likelyGroup = lowerTitle.contains(":") || lowerTitle.contains("group")
+                if (!likelyGroup) return true to "Direct Message"
+            }
+        }
+        
+        // Group Chats (Explicit Opt-in)
+        if (tags.contains("Group Chats")) {
+             if (isGroupConversation || lowerTitle.contains("group") || lowerTitle.contains(":")) return true to "Group Chat"
+        }
+        
+        if (tags.contains("Voice Msgs")) {
+            if (combined.contains("voice message") || combined.contains("audio")) return true to "Voice Msg"
+        }
+
+        // --- LOGISTICS & TIME ---
+        if (tags.contains("Rides") || tags.contains("Traffic")) {
+             if (combined.contains("arriving") || combined.contains("driver") || combined.contains("pickup") || combined.contains("traffic") || combined.contains("min away")) return true to "Transport"
+        }
+        if (tags.contains("Delivery")) {
+             if (combined.contains("delivery") || combined.contains("order") || combined.contains("food") || combined.contains("shipped") || combined.contains("out for")) return true to "Delivery"
+        }
+        if (tags.contains("Reminders") || tags.contains("Calendar")) {
+             if (combined.contains("reminder") || combined.contains("event") || combined.contains("meeting") || combined.contains("tomorrow") || combined.contains("starting")) return true to "Schedule"
+        }
+
+        // --- MONEY ---
+        if (tags.contains("Transaction") || tags.contains("Salary") || tags.contains("Bill Due")) {
+             if (combined.contains("spent") || combined.contains("credited") || combined.contains("debited") || combined.contains("salary") || combined.contains("bill") || combined.contains("due")) return true to "Finance"
+        }
+        if (tags.contains("Offers")) {
+             // Dangerous tag! Only allow if explicitly checking for "discount" etc but usually we block this.
+             // User explicitly asked for it? If selected, allow.
+             if (combined.contains("offer") || combined.contains("discount") || combined.contains("sale")) return true to "Offer"
+        }
+
+        // --- SYSTEM ---
+        if (tags.contains("Updates") || tags.contains("Downloads") || tags.contains("System")) {
+             if (combined.contains("update") || combined.contains("download") || combined.contains("installing") || combined.contains("battery") || combined.contains("usb")) return true to "System"
+        }
+        if (tags.contains("Reviews")) {
+             if (combined.contains("review") || combined.contains("rating") || combined.contains("star") || combined.contains("feedback")) return true to "Review"
+        }
+
+        return false to ""
+    }
+    
+    // ... rescue notification helper remains ...
     private fun triggerRescueNotification(originPackage: String, originTitle: String) {
+        // Implementation kept as is
         val channelId = "aura_rescue"
         val manager = getSystemService(android.app.NotificationManager::class.java)
-        
-        // Ensure channel exists
+        // ... (rest of logic same as before, just ensuring we don't delete it unintentionally)
         if (manager.getNotificationChannel(channelId) == null) {
             val channel = android.app.NotificationChannel(
                 channelId, 
@@ -152,9 +233,9 @@ class AuraNotificationService : NotificationListenerService() {
         }
 
         val notification = android.app.Notification.Builder(this, channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert) // TODO: Use Aura icon
+            .setSmallIcon(android.R.drawable.ic_dialog_alert) 
             .setContentTitle("Rescue: $originTitle")
-            .setContentText("Aura blocked this from $originPackage, but it looks urgent.")
+            .setContentText("Aura blocked this, but AI safely rescued it.")
             .setAutoCancel(true)
             .build()
             
@@ -165,43 +246,7 @@ class AuraNotificationService : NotificationListenerService() {
         super.onNotificationRemoved(sbn)
     }
     
-    private suspend fun performSmartCheck(
-        title: String, 
-        content: String, 
-        packageName: String, 
-        filterTemplate: com.aura.data.FilterTemplate, 
-        activeMode: com.aura.data.FocusMode
-    ): Boolean {
-         val category = classifier.classify(title, content, packageName)
-         
-         if (filterTemplate != com.aura.data.FilterTemplate.NONE) {
-             return when (filterTemplate) {
-                 com.aura.data.FilterTemplate.TRANSACTIONAL -> {
-                     category == "social" || category == "entertainment" || category == "promotional"
-                 }
-                 com.aura.data.FilterTemplate.MESSAGING -> {
-                     category == "promotional" || category == "entertainment"
-                 }
-                 com.aura.data.FilterTemplate.SOCIAL -> {
-                     category == "promotional"
-                 }
-                 com.aura.data.FilterTemplate.WORK -> {
-                     category == "social" || category == "entertainment" || category == "promotional"
-                 }
-                 else -> false
-             }
-         } else {
-             return when (activeMode) {
-                com.aura.data.FocusMode.FOCUS -> {
-                     category == "social" || category == "promotional" || category == "entertainment"
-                }
-                com.aura.data.FocusMode.RELAX -> {
-                     category == "promotional"
-                }
-             }
-         }
-    }
-
+    // Removed old performSmartCheck which is now obsolete
     override fun onDestroy() {
         super.onDestroy()
         job.cancel()

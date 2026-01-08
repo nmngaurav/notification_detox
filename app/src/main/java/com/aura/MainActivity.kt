@@ -20,14 +20,22 @@ import androidx.compose.animation.fadeIn
 import com.aura.ui.splash.SplashScreen
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var settingsDataStore: com.aura.data.SettingsDataStore
+    @Inject lateinit var configRepository: com.aura.data.repository.ConfigRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize Config (Async)
+        lifecycleScope.launch {
+            configRepository.initialize()
+        }
         setContent {
             AuraTheme {
                 Surface(

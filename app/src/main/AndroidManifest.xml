@@ -5,7 +5,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
     
     <!-- Android 11+ Package Visibility: Required to see all installed apps -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"

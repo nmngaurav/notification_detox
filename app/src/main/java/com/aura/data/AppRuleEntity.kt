@@ -7,9 +7,10 @@ data class AppRuleEntity(
     val packageName: String,
     val profileId: String = "STANDARD",
     
-    // V2 Fields
+    // V2/V3 Fields
     val shieldLevel: ShieldLevel = ShieldLevel.SMART,
-    val filterTemplate: FilterTemplate = FilterTemplate.NONE,
+    val filterTemplate: DetoxCategory = DetoxCategory.SOCIAL, // Legacy for single template
+    val activeCategories: String = "", // Comma-separated DetoxCategory names
     val customKeywords: String = "", // Comma-separated allow/block keywords
     
     val lastUpdated: Long = System.currentTimeMillis()
@@ -22,11 +23,12 @@ enum class ShieldLevel {
     NONE        // Fallback
 }
 
-enum class FilterTemplate(val displayName: String) {
-    NONE("None"),
-    MESSAGING("Vital Messaging"),    
-    TRANSACTIONAL("Transactional"),  
-    SOCIAL("Social Focus"),         
-    WORK("Deep Work"),
-    GAMES("Gaming")
+enum class DetoxCategory(val displayName: String) {
+    SOCIAL("Social"),
+    FINANCES("Finances"),
+    LOGISTICS("Deliveries"),
+    EVENTS("Events"),
+    GAMIFICATION("Gamification"),
+    PROMOS("Promos"),
+    UPDATES("Updates")
 }

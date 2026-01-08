@@ -1,6 +1,6 @@
 package com.aura.ui
 
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -66,6 +66,33 @@ fun AppNavigation(startDestination: String = "onboarding") {
                  onPurchaseClick = { /* TODO: Trigger Billing */ },
                  onClose = { navController.popBackStack() }
              )
+        }
+        composable("app_config/{packageName}") { backStackEntry ->
+            val packageName = backStackEntry.arguments?.getString("packageName") ?: return@composable
+            val viewModel: com.aura.ui.MainViewModel = hiltViewModel()
+            // We can observe the rule. For now, get from active list or repo (via VM if we add it).
+            // Simplest: Find in active list or fetch.
+            // Let's grab the current rule from active list flow for instant display.
+            val activeRules by viewModel.activeRules.collectAsState()
+            val rule = activeRules.find { r -> r.packageName == packageName } 
+                ?: return@composable 
+            
+            com.aura.ui.settings.AppConfigSheet(
+                appName = "App", 
+                packageName = rule.packageName,
+                currentShieldLevel = rule.shieldLevel,
+                initialCategories = rule.activeCategories,
+                keywords = rule.customKeywords,
+                onSave = { selectedLevel, selectedCategories, selectedKeywords ->
+                    viewModel.updateRule(rule.copy(shieldLevel = selectedLevel, activeCategories = selectedCategories, customKeywords = selectedKeywords))
+                    navController.popBackStack()
+                },
+                onRemove = {
+                    viewModel.removeRule(rule.packageName)
+                    navController.popBackStack()
+                },
+                onDismiss = { navController.popBackStack() }
+            )
         }
     }
 }

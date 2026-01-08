@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -17,8 +18,9 @@ import com.aura.billing.BillingManager
 import com.aura.util.AppInfoManager
 import com.aura.data.AppRuleEntity
 import com.aura.data.ShieldLevel
-import com.aura.data.FilterTemplate
+import com.aura.data.DetoxCategory
 import com.aura.data.NotificationRepository
+import com.aura.data.FocusMode
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -37,12 +39,27 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    private val _activeMode = MutableStateFlow(focusModeManager.getMode())
-    val activeMode = _activeMode.asStateFlow()
+    private val _currentMode = MutableStateFlow(FocusMode.FOCUS)
+    val currentMode = _currentMode.asStateFlow()
 
-    fun setFocusMode(mode: com.aura.data.FocusMode) {
-        focusModeManager.setMode(mode)
-        _activeMode.value = mode
+    private val _isSummarizeMode = MutableStateFlow(true)
+    val isSummarizeMode = _isSummarizeMode.asStateFlow()
+
+    fun setMode(mode: com.aura.data.FocusMode) {
+        // No-op V3
+    }
+
+    fun toggleSummarizeMode() {
+        _isSummarizeMode.value = !_isSummarizeMode.value
+    }
+
+    // Per-app View Toggle (Summary vs Detail)
+    private val _perAppViewMode = mutableStateMapOf<String, Boolean>() // pkg to isSummarize
+    val perAppViewMode: Map<String, Boolean> get() = _perAppViewMode
+
+    fun toggleAppViewMode(packageName: String) {
+        val current = _perAppViewMode[packageName] ?: _isSummarizeMode.value
+        _perAppViewMode[packageName] = !current
     }
 
     fun getAppInfo(packageName: String) = appInfoManager.getAppInfo(packageName)
@@ -52,13 +69,7 @@ class MainViewModel @Inject constructor(
         .map { true } // Force TRUE for User Testing/Demo
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
-    private val _currentMode = MutableStateFlow(focusModeManager.getMode())
-    val currentMode = _currentMode.asStateFlow()
 
-    fun setMode(mode: com.aura.data.FocusMode) {
-        focusModeManager.setMode(mode)
-        _currentMode.value = mode
-    }
 
     fun clearNotificationsForPackage(packageName: String) {
         viewModelScope.launch {
@@ -73,7 +84,7 @@ class MainViewModel @Inject constructor(
                 AppRuleEntity(
                     packageName = packageName,
                     shieldLevel = ShieldLevel.FORTRESS,
-                    filterTemplate = FilterTemplate.NONE,
+                    filterTemplate = DetoxCategory.SOCIAL, // Legacy fallback
                     profileId = _currentMode.value.name,
                     lastUpdated = System.currentTimeMillis()
                 )
@@ -87,7 +98,7 @@ class MainViewModel @Inject constructor(
                 AppRuleEntity(
                     packageName = packageName,
                     shieldLevel = ShieldLevel.OPEN,
-                    filterTemplate = FilterTemplate.NONE,
+                    filterTemplate = DetoxCategory.SOCIAL, // Legacy fallback
                     profileId = _currentMode.value.name,
                     lastUpdated = System.currentTimeMillis()
                 )
@@ -98,30 +109,36 @@ class MainViewModel @Inject constructor(
     private val _summaries = mutableStateMapOf<String, String>()
     val summaries: Map<String, String> get() = _summaries
 
-    fun generateSummaryForPackage(packageName: String, notifications: List<NotificationEntity>) {
-        if (_summaries.containsKey(packageName)) return // Already summarized
+    private val _lastSummaryCounts = mutableMapOf<String, Int>()
+
+    fun toggleSummaryForPackage(packageName: String, notifications: List<NotificationEntity>) {
+        val currentlyShowingSummary = _perAppViewMode[packageName] == true
         
-        viewModelScope.launch {
-            _summaries[packageName] = "Thinking..."
-            val contentList = notifications.map { "${it.title}: ${it.content}" }
-            val summary = classifier.summarize(packageName, contentList)
-            _summaries[packageName] = summary
+        if (currentlyShowingSummary) {
+            // If already showing, toggle OFF (back to raw list)
+            _perAppViewMode[packageName] = false
+        } else {
+            // If showing List, toggle ON (to summary)
+            _perAppViewMode[packageName] = true
+            
+            // Generate if needed
+            val currentCount = notifications.size
+            val lastCount = _lastSummaryCounts[packageName] ?: 0
+            
+            if (!_summaries.containsKey(packageName) || currentCount > lastCount) {
+                viewModelScope.launch {
+                    _summaries[packageName] = "Thinking..."
+                    _lastSummaryCounts[packageName] = currentCount
+                    
+                    val contentList = notifications.map { "${it.title}: ${it.content}" }
+                    val summary = classifier.summarize(packageName, contentList)
+                    _summaries[packageName] = summary
+                }
+            }
         }
     }
 
-    fun allowConversation(packageName: String) {
-        viewModelScope.launch {
-            repository.updateRule(
-                AppRuleEntity(
-                    packageName = packageName,
-                    profileId = "STANDARD",
-                    shieldLevel = ShieldLevel.OPEN,
-                    filterTemplate = FilterTemplate.NONE,
-                    lastUpdated = System.currentTimeMillis()
-                )
-            )
-        }
-    }
+
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
@@ -161,7 +178,44 @@ class MainViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    // Expose active rules for Dashboard "Active Filters" list
+    // Expose active rules for Dashboard "Active Filters" list (Profile Aware)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val activeRules = _currentMode.flatMapLatest { mode ->
+        repository.getRulesForProfile(mode.name)
+    }.map { rules -> 
+        rules.filter { it.shieldLevel == ShieldLevel.SMART || it.shieldLevel == ShieldLevel.FORTRESS }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // In a real app we would inject BillingManager here or use a shared UseCase
     // For MVP, we'll assume the repository or a separate manager holds this state
     // We will pass it from UI for now or inject BillingManager
+    
+    fun updateRule(rule: AppRuleEntity) {
+        viewModelScope.launch {
+            repository.updateRule(rule)
+        }
+    }
+
+    fun updateSmartRule(packageName: String, profileId: String, categories: String, keywords: String) {
+        viewModelScope.launch {
+            repository.updateRule(
+                AppRuleEntity(
+                    packageName = packageName,
+                    profileId = profileId,
+                    shieldLevel = ShieldLevel.SMART,
+                    activeCategories = categories,
+                    customKeywords = keywords,
+                    lastUpdated = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
+    fun removeRule(packageName: String) {
+        viewModelScope.launch {
+            val mode = _currentMode.value.name
+            repository.deleteRule(packageName, mode)
+        }
+    }
 }

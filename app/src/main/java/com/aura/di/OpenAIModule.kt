@@ -18,15 +18,14 @@ object OpenAIModule {
 
     @Provides
     @Singleton
-    fun provideOpenAIClient(): OkHttpClient {
+    fun provideOpenAIClient(configRepository: com.aura.data.repository.ConfigRepository): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY }
         
         return OkHttpClient.Builder()
             .addInterceptor(logging)
             .addInterceptor { chain ->
-                // TODO: Add your OpenAI API key in local.properties as: OPENAI_API_KEY=your_key_here
-                // Then configure build.gradle.kts to read it from local.properties and add to BuildConfig
-                val apiKey = "Bearer YOUR_OPENAI_API_KEY"
+                // Dynamic Key Injection from Repository (cached)
+                val apiKey = "Bearer ${configRepository.getApiKey()}"
                 val request = chain.request().newBuilder()
                     .addHeader("Authorization", apiKey)
                     .build()
@@ -44,5 +43,15 @@ object OpenAIModule {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(OpenAIService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideConfigService(): com.aura.data.remote.ConfigService {
+        return Retrofit.Builder()
+            .baseUrl("https://bitart-apps.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(com.aura.data.remote.ConfigService::class.java)
     }
 }

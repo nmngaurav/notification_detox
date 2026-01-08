@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 
-@Database(entities = [NotificationEntity::class, AppRuleEntity::class], version = 4, exportSchema = false)
+@Database(entities = [NotificationEntity::class, AppRuleEntity::class], version = 5, exportSchema = false)
 @TypeConverters(AuraDatabase.Converters::class)
 abstract class AuraDatabase : RoomDatabase() {
     abstract fun notificationDao(): NotificationDao
@@ -20,10 +20,10 @@ abstract class AuraDatabase : RoomDatabase() {
         } catch (e: Exception) { ShieldLevel.SMART }
 
         @TypeConverter
-        fun fromFilterTemplate(template: FilterTemplate): String = template.name
+        fun fromDetoxCategory(template: DetoxCategory): String = template.name
         @TypeConverter
-        fun toFilterTemplate(value: String): FilterTemplate = try {
-            FilterTemplate.valueOf(value)
-        } catch (e: Exception) { FilterTemplate.NONE }
+        fun toDetoxCategory(value: String): DetoxCategory = try {
+            DetoxCategory.valueOf(value)
+        } catch (e: Exception) { DetoxCategory.SOCIAL }
     }
 }

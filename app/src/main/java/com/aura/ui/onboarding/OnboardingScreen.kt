@@ -18,17 +18,26 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -39,7 +48,7 @@ import com.aura.ui.components.ParticleSystem
 import kotlinx.coroutines.delay
 
 private enum class OnboardingStep {
-    SWARM, PAIN_POINTS, SHIELD_CONFIG, GATEWAY
+    SWARM, PAIN_POINTS, GATEWAY
 }
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -81,10 +90,7 @@ fun OnboardingScreen(
                 onComplete = { currentStep = OnboardingStep.PAIN_POINTS }
             )
             OnboardingStep.PAIN_POINTS -> PainPointsStage(
-                onComplete = { currentStep = OnboardingStep.SHIELD_CONFIG }
-            )
-            OnboardingStep.SHIELD_CONFIG -> OnboardingShieldConfigScreen(
-                onContinue = { currentStep = OnboardingStep.GATEWAY }
+                onComplete = { currentStep = OnboardingStep.GATEWAY }
             )
             OnboardingStep.GATEWAY -> GatewayStage(
                 hasPermission = hasNotificationAccess,
@@ -207,7 +213,7 @@ fun SwarmStage(onComplete: () -> Unit) {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             vaporizeAnim.animateTo(1f, animationSpec = tween(1500, easing = LinearEasing))
             delay(500)
-            onComplete() // NAVIGATE TO SHIELD CONFIG
+            onComplete() // NAVIGATE TO PAIN POINTS
         }
     }
 
@@ -266,33 +272,87 @@ fun SwarmStage(onComplete: () -> Unit) {
                 )
         )
         
-        // Progress Ring
+        // Progress Ring & Premium Touch Feedback
         Canvas(modifier = Modifier.fillMaxSize()) {
             val progress = vaporizeAnim.value
             
             if (holdProgress > 0f && touchPoint != null && progress < 0.1f) {
-                 drawCircle(
-                    color = Color.White.copy(alpha = 0.2f),
-                    radius = 200f,
+                // 1. Energy Core Glow
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color(0xFFDAA520).copy(alpha = 0.4f * holdProgress), Color.Transparent),
+                        center = touchPoint!!,
+                        radius = 300f * holdProgress
+                    ),
                     center = touchPoint!!,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
+                    radius = 300f
                 )
+
+                // 2. Rotating Sci-Fi Brackets (Outer Ring)
+                val baseOver = holdProgress * 360f
+                val numBrackets = 3
+                val sweep = 60f
+                
+                rotate(degrees = frameTick * 2f, pivot = touchPoint!!) {
+                    for (i in 0 until numBrackets) {
+                        val startAngle = (360f / numBrackets) * i
+                        drawArc(
+                            color = Color(0xFFDAA520).copy(alpha = 0.8f),
+                            startAngle = startAngle,
+                            sweepAngle = sweep * holdProgress,
+                            useCenter = false,
+                            topLeft = touchPoint!!.minus(Offset(180f, 180f)),
+                            size = androidx.compose.ui.geometry.Size(360f, 360f),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                width = 4f, 
+                                cap = androidx.compose.ui.graphics.StrokeCap.Round
+                            )
+                        )
+                    }
+                }
+
+                // 3. Inner Charging Ring (Fills up)
                 drawArc(
-                    color = Color(0xFFDAA520),
+                    color = Color.White,
                     startAngle = -90f,
                     sweepAngle = 360f * holdProgress,
                     useCenter = false,
-                    topLeft = touchPoint!!.minus(Offset(200f, 200f)),
-                    size = androidx.compose.ui.geometry.Size(400f, 400f),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 12f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    topLeft = touchPoint!!.minus(Offset(140f, 140f)),
+                    size = androidx.compose.ui.geometry.Size(280f, 280f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 8f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                 )
+                
+                // 4. Particles sucking in (implosion) simulation via lines
+                if (holdProgress > 0.2f) {
+                    val numLines = 12
+                    rotate(degrees = -frameTick * 3f, pivot = touchPoint!!) {
+                        for (i in 0 until numLines) {
+                            val angle = (360f / numLines) * i
+                            val rad = 220f * (1f - (frameTick % 20 / 20f)) // ripples in
+                            val start = Offset(
+                                touchPoint!!.x + kotlin.math.cos(Math.toRadians(angle.toDouble())).toFloat() * rad,
+                                touchPoint!!.y + kotlin.math.sin(Math.toRadians(angle.toDouble())).toFloat() * rad
+                            )
+                            val end = Offset(
+                                touchPoint!!.x + kotlin.math.cos(Math.toRadians(angle.toDouble())).toFloat() * (rad - 30f),
+                                touchPoint!!.y + kotlin.math.sin(Math.toRadians(angle.toDouble())).toFloat() * (rad - 30f)
+                            )
+                            drawLine(
+                                color = Color(0xFFDAA520).copy(alpha = 0.5f),
+                                start = start,
+                                end = end,
+                                strokeWidth = 2f
+                            )
+                        }
+                    }
+                }
             }
             
             // Vaporize Flash
             if (progress > 0f) {
                  drawCircle(
-                    color = Color(0xFFDAA520).copy(alpha = progress * 0.8f), 
-                    radius = size.maxDimension * progress * 2f,
+                    color = Color(0xFFDAA520).copy(alpha = (1f - progress) * 0.8f), 
+                    radius = size.maxDimension * progress * 1.5f,
                     center = center
                 )
             }
@@ -304,14 +364,14 @@ fun SwarmStage(onComplete: () -> Unit) {
             
             val displayText = when {
                 isStabilizing -> "" // No text during hold (progress ring visible)
-                touchPoint != null -> "HOLD TO TAKE CONTROL"
-                else -> "YOUR NOTIFICATIONS NEVER STOP"
+                touchPoint != null -> "KEEP HOLDING..."
+                else -> "HOLD TO TAKE CONTROL"
             }
             
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = displayText,
-                    color = Color.White.copy(alpha = alpha),
+                    color = Color.White.copy(alpha = if (touchPoint != null) 1f else alpha), // Solid when holding
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp
@@ -340,66 +400,133 @@ fun PainPointsStage(onComplete: () -> Unit) {
         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
     }
     
-    // Physics Parameters based on Page using derivedStateOf for performance
+    // ENHANCED: Smooth Particle Physics Transitions
+    // Particles now smoothly morph between emotional states
     val targetPhysics by remember {
         derivedStateOf {
             when (pagerState.currentPage) {
-                0 -> Triple(Color.White, 3f, 0.5f)    // Page 0: Chaos (White, Fast, some jitter)
-                1 -> Triple(Color.Gray, 0.2f, 0.0f)   // Page 1: Sluggish (Gray, Slow, no jitter)
-                2 -> Triple(Color(0xFFEF5350), 8f, 2f) // Page 2: Stress (Red, Super Fast, High Jitter)
-                3 -> Triple(Color(0xFFDAA520), 1f, 0.1f) // Page 3: Solution (Gold, Flow, Low jitter)
-                else -> Triple(Color.White, 1f, 0f)
+                0 -> Triple(Color(0xFF888888), 1.5f, 0.8f)  // Gray, chaotic
+                1 -> Triple(Color(0xFFEF5350), 1.2f, 0.6f)  // Red, stressed  
+                2 -> Triple(Color(0xFFFF6F00), 0.9f, 0.4f)  // Orange, anxious
+                3 -> Triple(Color(0xFFDAA520), 0.5f, 0.2f)  // Gold, calm (solution)
+                else -> Triple(Color.Gray, 1.0f, 0.5f)
             }
         }
     }
-
-    // Background Gradients
-    val targetGradient by remember {
-        derivedStateOf {
-            when (pagerState.currentPage) {
-                0 -> listOf(Color(0xFF222222), Color(0xFF000000)) // Chaos
-                1 -> listOf(Color(0xFF263238), Color(0xFF000000)) // Fog
-                2 -> listOf(Color(0xFF4B0000), Color(0xFF100000)) // Stress (Deep Red)
-                3 -> listOf(Color(0xFF5D4037), Color(0xFF1B0000)) // Hope (Warm Gold/Brown)
-                else -> listOf(Color.Black, Color.Black)
-            }
-        }
-    }
-    val bgStart by animateColorAsState(targetGradient[0], tween(1000), label = "bgStart")
-    val bgEnd by animateColorAsState(targetGradient[1], tween(1000), label = "bgEnd")
     
-    // Canvas Size
-    var canvasSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    // Animate particle properties for smooth transitions
+    val particleColor by animateColorAsState(
+        targetValue = targetPhysics.first,
+        animationSpec = tween(1200, easing = FastOutSlowInEasing),
+        label = "particleColor"
+    )
+    val particleSpeed by animateFloatAsState(
+        targetValue = targetPhysics.second,
+        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        label = "particleSpeed"
+    )
+    val particleTurbulence by animateFloatAsState(
+        targetValue = targetPhysics.third,
+        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        label = "particleTurbulence"
+    )
 
-    // Animation Loop
-    LaunchedEffect(Unit) {
-        particleSystem.init(1000f, 2000f) // Init with dummy until layout
-        while (true) {
-            if (canvasSize.width > 0) {
-                 particleSystem.updatePainPoints(
-                    width = canvasSize.width,
-                    height = canvasSize.height,
-                    targetColor = targetPhysics.first,
-                    speedMultiplier = targetPhysics.second,
-                    turbulence = targetPhysics.third
-                )
-            }
-            delay(16)
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(bgStart, bgEnd)
+    // Background Gradients (matching particle emotional themes)
+    // We will use a dynamic Nebula effect instead of a static gradient
+    
+    // Use BoxWithConstraints to ensure we get size immediately
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize().background(Color.Black)
+    ) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val widthPx = with(density) { maxWidth.toPx() }
+        val heightPx = with(density) { maxHeight.toPx() }
+        
+        // NEBULA BACKGROUND EFFECT
+        val nebulaColor by animateColorAsState(targetPhysics.first, tween(1500))
+        val infiniteTransition = rememberInfiniteTransition(label = "Nebula")
+        val nebulaOffset1 by infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 1f, 
+            animationSpec = infiniteRepeatable(tween(10000, easing = LinearEasing), RepeatMode.Reverse), label = "N1"
+        )
+        val nebulaOffset2 by infiniteTransition.animateFloat(
+            initialValue = 0f, targetValue = 1f, 
+            animationSpec = infiniteRepeatable(tween(15000, easing = LinearEasing), RepeatMode.Reverse), label = "N2"
+        )
+        
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            // Aurora Effect (Soft, diffuse, no hard circles)
+            drawRect(Color.Black)
+            
+            val auroraX = size.width * (0.2f + 0.6f * nebulaOffset1)
+            val auroraY = size.height * 0.4f
+            
+            // Soft diffuse glow 1
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(nebulaColor.copy(alpha = 0.2f), Color.Transparent),
+                    center = Offset(auroraX, auroraY),
+                    radius = size.maxDimension * 0.8f
                 )
             )
-    ) {
-        // 1. Particle Background
+            
+            // Soft diffuse glow 2 (Counter)
+            val auroraX2 = size.width * (0.8f - 0.6f * nebulaOffset2)
+            drawRect(
+                brush = Brush.radialGradient(
+                    colors = listOf(nebulaColor.copy(alpha = 0.1f), Color.Transparent),
+                    center = Offset(auroraX2, size.height * 0.7f),
+                    radius = size.maxDimension * 0.9f
+                )
+            )
+            
+            // Bottom ambient glow
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, nebulaColor.copy(alpha = 0.15f)),
+                    startY = size.height * 0.5f,
+                    endY = size.height
+                )
+            )
+        }
+
+        // CRITICAL FIX: Initialize particles SYNCHRONOUSLY
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        remember {
+            if (particleSystem.getParticles().isEmpty()) {
+                val displayMetrics = ctx.resources.displayMetrics
+                particleSystem.init(displayMetrics.widthPixels.toFloat(), displayMetrics.heightPixels.toFloat())
+            }
+            true
+        }
+
+        LaunchedEffect(widthPx, heightPx) {
+            if (widthPx > 0 && heightPx > 0 && particleSystem.getParticles().isEmpty()) {
+                particleSystem.init(widthPx, heightPx)
+            }
+        }
+
+        var frameCounter by remember { mutableStateOf(0) }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                if (widthPx > 0) {
+                     particleSystem.updatePainPoints(
+                        width = widthPx,
+                        height = heightPx,
+                        targetColor = particleColor,
+                        speedMultiplier = particleSpeed,
+                        turbulence = particleTurbulence
+                    )
+                    frameCounter++
+                }
+                delay(16)
+            }
+        }
+
+        // Particles
         Canvas(modifier = Modifier.fillMaxSize()) {
-            canvasSize = size
+            frameCounter.let { } 
             particleSystem.getParticles().forEach { p ->
                 drawCircle(
                     color = p.color.copy(alpha = p.alpha * 0.6f),
@@ -409,7 +536,7 @@ fun PainPointsStage(onComplete: () -> Unit) {
             }
         }
 
-        // 2. Content Pager
+        // Content Pager
         Column(modifier = Modifier.fillMaxSize()) {
             HorizontalPager(
                 state = pagerState,
@@ -420,29 +547,15 @@ fun PainPointsStage(onComplete: () -> Unit) {
             
             // Pager Indicators
             Row(
-                Modifier
-                    .wrapContentHeight()
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp),
+                Modifier.wrapContentHeight().fillMaxWidth().padding(bottom = 32.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
                 repeat(pagerState.pageCount) { iteration ->
                     val isSelected = pagerState.currentPage == iteration
                     val color = if (isSelected) Color(0xFFDAA520) else Color.DarkGray
-                    val width by animateDpAsState(
-                        targetValue = if (isSelected) 32.dp else 8.dp,
-                        animationSpec = tween(300), 
-                        label = "indicatorWidth"
-                    )
+                    val width by animateDpAsState(targetValue = if (isSelected) 32.dp else 8.dp, animationSpec = tween(300))
                     
-                    Box(
-                        modifier = Modifier
-                            .padding(4.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                            .height(8.dp)
-                            .width(width)
-                    )
+                    Box(modifier = Modifier.padding(4.dp).clip(CircleShape).background(color).height(8.dp).width(width))
                 }
             }
         }
@@ -450,100 +563,102 @@ fun PainPointsStage(onComplete: () -> Unit) {
 }
 
 @Composable
-fun PainPointStoryPage(page: Int, isVisible: Boolean, onComplete: () -> Unit) {
+fun PainPointStoryPage(
+    page: Int, 
+    isSelected: Boolean, 
+    onComplete: () -> Unit
+) {
     val content = when(page) {
-        0 -> Triple("150", "Daily Unlocks", "Your focus is shattered every 12 minutes.")
-        1 -> Triple("23m", "Lost Time", "To recover focus after just one buzz.")
+        0 -> Triple("~150", "Phone Unlocks", "Triggered by notifications daily.")
+        1 -> Triple("~23 min", "Lost Focus", "To recover flow after just one buzz.")
         2 -> Triple("+40%", "Stress Level", "Phantom vibrations keep you on edge.")
-        3 -> Triple("0", "Interruptions", "Reclaim your mind with Shield.")
+        3 -> Triple("0", "Interruptions", "Reclaim your mind with Aura Filter.")
         else -> Triple("", "", "")
     }
+    
+    val slideY by animateDpAsState(
+        targetValue = if (isSelected) 0.dp else 50.dp,
+        animationSpec = tween(500, delayMillis = 200)
+    )
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Box(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Big Stat
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = slideInVertically(initialOffsetY = { 100 }) + fadeIn(tween(800)),
-            exit = fadeOut()
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center, // Perfect centering
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = content.first,
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontSize = 96.sp,
-                    fontWeight = FontWeight.Black
-                ),
-                color = if (page == 2) Color(0xFFEF5350) else if (page == 3) Color(0xFFDAA520) else Color.White
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Title
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = slideInVertically(initialOffsetY = { 50 }) + fadeIn(tween(800, delayMillis = 200)),
-            exit = fadeOut()
-        ) {
+            // CINEMATIC DECODER STAT
+            if (isSelected) {
+                DecoderText(
+                    text = content.first,
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontWeight = FontWeight.Black,
+                        fontSize = 64.sp
+                    ),
+                    color = Color.White
+                )
+            } else {
+                 Text(text = " ", style = MaterialTheme.typography.displayLarge, fontSize = 64.sp)
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = content.second.uppercase(),
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color(0xFFDAA520),
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
-                letterSpacing = 2.sp
+                letterSpacing = 4.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.offset(y = slideY)
             )
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Description
-        AnimatedVisibility(
-             visible = isVisible,
-             enter = slideInVertically(initialOffsetY = { 50 }) + fadeIn(tween(800, delayMillis = 400)),
-             exit = fadeOut()
-        ) {
+            Spacer(modifier = Modifier.height(24.dp))
             Text(
                 text = content.third,
                 style = MaterialTheme.typography.bodyLarge,
+                color = Color.Gray,
                 textAlign = TextAlign.Center,
-                color = Color.Gray
+                modifier = Modifier.offset(y = slideY)
             )
-        }
-        
-        // CTA Button on last page
-        if (page == 3) {
-            Spacer(modifier = Modifier.height(48.dp))
-            AnimatedVisibility(
-                visible = isVisible,
-                enter = scaleIn(tween(500, delayMillis = 800)) + fadeIn(tween(500, delayMillis = 800))
-            ) {
-                Button(
-                    onClick = onComplete,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFDAA520)
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                ) {
-                    Text(
-                        text = "ACTIVATE SHIELD",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                }
+            
+            if (page == 3) {
+                 Spacer(modifier = Modifier.height(48.dp))
+                 AnimatedVisibility(
+                     visible = isSelected,
+                     enter = fadeIn(tween(1000, delayMillis = 500)) + scaleIn()
+                 ) {
+                     Button(
+                        onClick = onComplete,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                        modifier = Modifier.height(56.dp).width(200.dp)
+                    ) {
+                        Text("CONTINUE", fontWeight = FontWeight.Bold)
+                    }
+                 }
             }
         }
     }
 }
 
+@Composable
+fun DecoderText(text: String, style: TextStyle, color: Color) {
+    var displayedText by remember { mutableStateOf("") }
+    val chars = "0123456789%~+".toList()
+    
+    LaunchedEffect(text) {
+        // Scramble effect
+        val length = text.length
+        for (i in 0..15) { // scramble frames
+            displayedText = (1..length).map { chars.random() }.joinToString("")
+            delay(50)
+        }
+        displayedText = text // Final reveal
+    }
+    
+    Text(text = displayedText, style = style, color = color)
+}
 
 // ------------------------------------
 // STEP 3: GATEWAY (Permission)
@@ -555,134 +670,269 @@ fun GatewayStage(
     onEnter: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "Pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
+    val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 0.7f,
+        targetValue = 1.02f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1000),
+            animation = tween(1000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
-        ), label = "PulseAlpha"
+        ), label = "PulseScale"
     )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF332200), Color.Black),
-                    radius = 2000f
-                )
-            ),
-        contentAlignment = Alignment.Center
+            .background(Color.Black)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp, vertical = 24.dp) // Adjusted padding
         ) {
+            // Push content down to center it vertically (More spacing)
+            Spacer(modifier = Modifier.weight(0.65f))
             
-            // Dynamic Title
-            AnimatedContent(targetState = hasPermission, label = "GatewayTitle") { granted ->
-                if (granted) {
-                     Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color(0xFF4CAF50),
-                        modifier = Modifier.size(64.dp).padding(bottom = 16.dp)
-                    )
-                } else {
-                    Text(
-                        text = "ENABLE AURA", // Changed from GRANT ACCESS
-                        color = Color.White,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 2.sp
-                    )
-                }
-            }
+            Text(
+                text = "ENABLE AURA",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.sp
+            )
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(48.dp)) // Increased spacing
             
-            com.aura.ui.components.GlassCard(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        text = "Privacy First",
-                        color = Color(0xFFDAA520),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Trust Indicators
-                    TrustIndicatorRow(
-                        icon = "📱",
-                        text = "Processing happens on your device"
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TrustIndicatorRow(
-                        icon = "🔒",
-                        text = "Zero data sent to servers"
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TrustIndicatorRow(
-                        icon = "⚡",
-                        text = "Works offline"
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Aura processes notifications locally to filter distractions. We need permission to intercept them.",
-                        color = Color.LightGray,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
+            // Primary Action Button (Premium Design)
             AnimatedContent(targetState = hasPermission, label = "GatewayButton") { granted ->
                 if (granted) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                         Text(
-                            text = "Aura is ready.",
-                            color = Color(0xFF4CAF50),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-                        Button(
-                            onClick = onEnter,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFDAA520), // Gold for Entry
-                                contentColor = Color.Black
-                            ),
-                            modifier = Modifier.height(56.dp).fillMaxWidth(0.8f)
-                        ) {
-                            Text("ENTER AURA", fontWeight = FontWeight.Bold)
-                        }
+                    Button(
+                        onClick = onEnter,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFDAA520),
+                            contentColor = Color.Black
+                        ),
+                        modifier = Modifier.height(60.dp).fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("ENTER AURA", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                 } else {
                      Button(
                         onClick = onRequestPermission,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF333333), // Darker for action
-                            contentColor = Color.White
+                            containerColor = Color(0xFFDAA520), 
+                            contentColor = Color(0xFF1A0000) // Deep dark brown text for premium look
                         ),
-                        modifier = Modifier.height(56.dp).fillMaxWidth(0.8f).alpha(pulseAlpha)
+                        modifier = Modifier
+                            .height(60.dp)
+                            .fillMaxWidth()
+                            .scale(pulseScale)
+                            .border(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(16.dp)), // Gold border
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 12.dp, pressedElevation = 4.dp)
                     ) {
-                        Text("GRANT PERMISSION", fontWeight = FontWeight.Bold)
+                        Text("GRANT PERMISSION", fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.sp)
                     }
                 }
             }
             
-            if (!hasPermission) {
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(56.dp)) // Increased spacing
+            
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Required for Smart Shield to work",
-                    color = Color.White.copy(alpha = 0.5f),
-                    style = MaterialTheme.typography.labelMedium
+                    text = "How to enable:",
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(bottom = 16.dp, start = 4.dp)
                 )
+                PermissionTutorial()
+            }
+            
+            // Push Privacy Card to Bottom
+            Spacer(modifier = Modifier.weight(0.5f))
+            
+            // Privacy Context (Refined & Bottom Stick)
+            com.aura.ui.components.GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = Color(0xFF111111)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color.DarkGray, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Zero Data Collection",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Your personal data stays on this device. Aura operates locally and respects your digital privacy.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.Gray,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PermissionTutorial() {
+    // Animation Steps: 
+    // 0: List View
+    // 1: Click Aura
+    // 2: Toggle Switch
+    // 3: Dialog Allow
+    val transition = rememberInfiniteTransition(label = "Tutorial")
+    val step by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(8000, easing = LinearEasing), // Slower for clarity
+            repeatMode = RepeatMode.Restart
+        ), label = "Step"
+    )
+    
+    val currentStep = step.toInt()
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF121212)) // Android dark theme bg
+            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Fake Toolbar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(Color(0xFF1E1E1E))
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Text(
+                    text = if (currentStep < 2) "Device & App Notifications" else "Notification Access",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            
+            // Content
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                if (currentStep < 2) {
+                    // LIST VIEW
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        // Dummy App
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(0.3f)) {
+                            Box(Modifier.size(32.dp).background(Color.Gray, CircleShape))
+                            Spacer(Modifier.width(16.dp))
+                            Box(Modifier.height(10.dp).width(100.dp).background(Color.Gray, RoundedCornerShape(5.dp)))
+                        }
+                        
+                        // Aura App (Highlighted)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (currentStep == 1) Color(0xFFDAA520).copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.size(32.dp).background(Color.Black, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.foundation.Image(
+                                    painter = androidx.compose.ui.res.painterResource(id = com.aura.R.mipmap.ic_launcher_round),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                )
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Text("Aura", color = Color.White, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.weight(1f))
+                            Text(if(currentStep > 0) "Not allowed" else "Not allowed", color = Color.Gray, fontSize = 12.sp)
+                        }
+                        
+                        // Hand Indicator
+                        if (currentStep == 1) {
+                             Icon(
+                                imageVector = Icons.Default.Check, // Using Check as a 'touch' indicator for now or just the highlight is enough
+                                contentDescription = null,
+                                tint = Color(0xFFDAA520),
+                                modifier = Modifier.align(Alignment.End).offset(y = (-10).dp)
+                            )
+                        }
+                    }
+                } else {
+                    // DETAIL TOGGLE VIEW
+                    Column {
+                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier.size(40.dp).background(Color.Black, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.foundation.Image(
+                                    painter = androidx.compose.ui.res.painterResource(id = com.aura.R.mipmap.ic_launcher_round),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+                                )
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Column {
+                                Text("Allow notification access", color = Color.White, fontSize = 16.sp)
+                                Text("Aura", color = Color.Gray, fontSize = 12.sp)
+                            }
+                            Spacer(Modifier.weight(1f))
+                            
+                            // Toggle Switch
+                            Box(
+                                modifier = Modifier
+                                    .width(48.dp)
+                                    .height(28.dp)
+                                    .background(
+                                        if (currentStep >= 3) Color(0xFFDAA520) else Color.DarkGray, 
+                                        RoundedCornerShape(14.dp)
+                                    ),
+                                contentAlignment = if (currentStep >= 3) Alignment.CenterEnd else Alignment.CenterStart
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(2.dp)
+                                        .size(24.dp)
+                                        .background(Color.White, CircleShape)
+                                )
+                            }
+                        }
+                        
+                        // Allow Dialog Simulation
+                         if (currentStep == 3) {
+                             Spacer(Modifier.height(16.dp))
+                             Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF2C2C2C), RoundedCornerShape(8.dp))
+                                    .padding(12.dp)
+                             ) {
+                                 Text("Allow Aura to access notifications?", color = Color.White, fontSize = 12.sp)
+                             }
+                         }
+                    }
+                }
             }
         }
     }

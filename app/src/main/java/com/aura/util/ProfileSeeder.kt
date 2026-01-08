@@ -3,7 +3,7 @@ package com.aura.util
 import android.content.Context
 import com.aura.data.AppRuleDao
 import com.aura.data.AppRuleEntity
-import com.aura.data.FilterTemplate
+import com.aura.data.DetoxCategory
 import com.aura.data.ShieldLevel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -25,28 +25,28 @@ class ProfileSeeder @Inject constructor(
     
     private val knownApps = mapOf(
         // Social
-        "com.instagram.android" to FilterTemplate.SOCIAL,
-        "com.facebook.katana" to FilterTemplate.SOCIAL,
-        "com.twitter.android" to FilterTemplate.SOCIAL,
-        "com.snapchat.android" to FilterTemplate.SOCIAL,
-        "com.reddit.frontpage" to FilterTemplate.SOCIAL,
+        "com.instagram.android" to DetoxCategory.SOCIAL,
+        "com.facebook.katana" to DetoxCategory.SOCIAL,
+        "com.twitter.android" to DetoxCategory.SOCIAL,
+        "com.snapchat.android" to DetoxCategory.SOCIAL,
+        "com.reddit.frontpage" to DetoxCategory.SOCIAL,
         
         // Messaging
-        "com.whatsapp" to FilterTemplate.MESSAGING,
-        "org.telegram.messenger" to FilterTemplate.MESSAGING,
-        "com.discord" to FilterTemplate.MESSAGING,
+        "com.whatsapp" to DetoxCategory.SOCIAL,
+        "org.telegram.messenger" to DetoxCategory.SOCIAL,
+        "com.discord" to DetoxCategory.SOCIAL,
         
         // Transactional/Finance
-        "com.google.android.gm" to FilterTemplate.TRANSACTIONAL, // Gmail
-        "com.phonepe.app" to FilterTemplate.TRANSACTIONAL,
-        "net.one97.paytm" to FilterTemplate.TRANSACTIONAL,
-        "com.google.android.apps.nbu.paisa.user" to FilterTemplate.TRANSACTIONAL, // GPay
+        "com.google.android.gm" to DetoxCategory.FINANCES, // Gmail
+        "com.phonepe.app" to DetoxCategory.FINANCES,
+        "net.one97.paytm" to DetoxCategory.FINANCES,
+        "com.google.android.apps.nbu.paisa.user" to DetoxCategory.FINANCES, // GPay
         
         // Work/Productivity
-        "com.slack" to FilterTemplate.WORK,
-        "com.microsoft.teams" to FilterTemplate.WORK,
-        "com.asana.app" to FilterTemplate.WORK,
-        "com.trello" to FilterTemplate.WORK
+        "com.slack" to DetoxCategory.SOCIAL,
+        "com.microsoft.teams" to DetoxCategory.SOCIAL,
+        "com.asana.app" to DetoxCategory.UPDATES,
+        "com.trello" to DetoxCategory.UPDATES
     )
     
     /**
