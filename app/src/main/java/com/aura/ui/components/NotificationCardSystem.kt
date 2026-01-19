@@ -1,7 +1,16 @@
 package com.aura.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -315,4 +324,45 @@ class NotificationCardSystem(private val count: Int = 30) {
     }
     
     fun getCards(): List<NotificationCard> = cards
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun NotificationCardSystemPreview() {
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1a1a2e),
+                        Color(0xFF16213e),
+                        Color(0xFF0f3460)
+                    )
+                )
+            )
+    ) {
+        val density = LocalDensity.current
+        val widthPx = with(density) { maxWidth.toPx() }
+        val heightPx = with(density) { maxHeight.toPx() }
+        
+        val notificationSystem = remember(widthPx, heightPx) {
+            NotificationCardSystem(count = 8).apply {
+                init(widthPx, heightPx, null)
+            }
+        }
+        
+        // Render cards
+        val cards = notificationSystem.getCards()
+        cards.forEach { card ->
+            val offsetX = with(density) { card.position.x.toDp() }
+            val offsetY = with(density) { card.position.y.toDp() }
+            
+            Box(
+                modifier = Modifier.offset(x = offsetX, y = offsetY)
+            ) {
+                NotificationCardComposable(card = card)
+            }
+        }
+    }
 }

@@ -16,7 +16,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.Brush
 import com.aura.data.DigestItem
+import com.aura.data.NotificationEntity
 
 @Composable
 fun DigestCard(
@@ -188,5 +191,133 @@ fun DigestCard(
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun DigestCardPreview() {
+    val sampleNotifications = listOf(
+        NotificationEntity(
+            packageName = "com.whatsapp",
+            title = "John Doe",
+            content = "Hey! How are you doing?",
+            timestamp = System.currentTimeMillis() - 3600000,
+            category = "messaging",
+            isBlocked = true
+        ),
+        NotificationEntity(
+            packageName = "com.whatsapp",
+            title = "Jane Smith",
+            content = "Don't forget about the meeting tomorrow",
+            timestamp = System.currentTimeMillis() - 7200000,
+            category = "messaging",
+            isBlocked = true
+        ),
+        NotificationEntity(
+            packageName = "com.whatsapp",
+            title = "Team Chat",
+            content = "New message in group",
+            timestamp = System.currentTimeMillis() - 10800000,
+            category = "messaging",
+            isBlocked = true
+        ),
+        NotificationEntity(
+            packageName = "com.whatsapp",
+            title = "Alice",
+            content = "Thanks for your help!",
+            timestamp = System.currentTimeMillis() - 14400000,
+            category = "messaging",
+            isBlocked = true
+        ),
+        NotificationEntity(
+            packageName = "com.whatsapp",
+            title = "Bob",
+            content = "Can we reschedule?",
+            timestamp = System.currentTimeMillis() - 18000000,
+            category = "messaging",
+            isBlocked = true
+        )
+    )
+    
+    val sampleItem = DigestItem(
+        packageName = "com.whatsapp",
+        label = "WhatsApp",
+        icon = null,
+        summary = null,
+        count = 5,
+        notifications = sampleNotifications
+    )
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1a1a2e),
+                        Color(0xFF16213e),
+                        Color(0xFF0f3460)
+                    )
+                )
+            )
+            .padding(16.dp)
+    ) {
+        DigestCard(
+            item = sampleItem,
+            onSummarizeClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "With AI Summary")
+@Composable
+private fun DigestCardWithSummaryPreview() {
+    val sampleNotifications = listOf(
+        NotificationEntity(
+            packageName = "com.instagram",
+            title = "Instagram",
+            content = "New post from friend",
+            timestamp = System.currentTimeMillis() - 3600000,
+            category = "social",
+            isBlocked = true
+        ),
+        NotificationEntity(
+            packageName = "com.instagram",
+            title = "Instagram",
+            content = "You have 3 new followers",
+            timestamp = System.currentTimeMillis() - 7200000,
+            category = "social",
+            isBlocked = true
+        )
+    )
+    
+    val sampleItem = DigestItem(
+        packageName = "com.instagram",
+        label = "Instagram",
+        icon = null,
+        summary = "You received 2 social notifications today. One new post from a friend and 3 new followers. Nothing urgent that requires immediate attention.",
+        count = 2,
+        notifications = sampleNotifications
+    )
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF1a1a2e),
+                        Color(0xFF16213e),
+                        Color(0xFF0f3460)
+                    )
+                )
+            )
+            .padding(16.dp)
+    ) {
+        DigestCard(
+            item = sampleItem,
+            onSummarizeClick = {}
+        )
     }
 }

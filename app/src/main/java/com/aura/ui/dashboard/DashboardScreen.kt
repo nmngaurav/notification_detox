@@ -224,7 +224,8 @@ fun DashboardScreen(
                                 viewModel = viewModel,
                                 accentColor = accentColor,
                                 summaries = summaries,
-                                notifications = groupedNotifications[pkg] ?: emptyList()
+                                notifications = groupedNotifications[pkg] ?: emptyList(),
+                                navController = navController
                             )
                         }
                     }
@@ -442,7 +443,8 @@ fun AppActionCard(
     viewModel: MainViewModel,
     accentColor: Color,
     summaries: Map<String, String>,
-    notifications: List<com.aura.data.NotificationEntity>
+    notifications: List<com.aura.data.NotificationEntity>,
+    navController: NavController
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val appInfo = remember(pkg) { viewModel.getAppInfo(pkg) }
@@ -572,9 +574,14 @@ fun AppActionCard(
                         if (notifications.size > 3) {
                             Text(
                                 text = "+ ${notifications.size - 3} more",
-                                color = accentColor.copy(alpha = 0.5f),
+                                color = accentColor.copy(alpha = 0.7f),
                                 style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(start = 12.dp, top = 4.dp)
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .padding(start = 12.dp, top = 4.dp)
+                                    .clickable { 
+                                        navController.navigate("notification_detail/$pkg")
+                                    }
                             )
                         }
                     }

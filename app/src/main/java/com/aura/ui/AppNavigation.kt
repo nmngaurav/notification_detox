@@ -94,5 +94,12 @@ fun AppNavigation(startDestination: String = "onboarding") {
                 onDismiss = { navController.popBackStack() }
             )
         }
+        composable("notification_detail/{packageName}") { backStackEntry ->
+            val packageName = backStackEntry.arguments?.getString("packageName") ?: return@composable
+            com.aura.ui.notifications.NotificationDetailScreen(
+                navController = navController,
+                packageName = packageName
+            )
+        }
     }
 }
