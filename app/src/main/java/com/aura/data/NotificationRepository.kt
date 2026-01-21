@@ -21,6 +21,7 @@ interface NotificationRepository {
     
     fun getAllNotifications(): Flow<List<NotificationEntity>>
     fun getAllRules(): Flow<List<AppRuleEntity>>
+    suspend fun getAppsWithNotifications(): List<String>
 }
 
 @Singleton
@@ -73,4 +74,6 @@ class NotificationRepositoryImpl @Inject constructor(
     override fun getAllNotifications(): Flow<List<NotificationEntity>> = notificationDao.getAllNotifications()
 
     override fun getAllRules(): Flow<List<AppRuleEntity>> = appRuleDao.getAllRulesRaw()
+    
+    override suspend fun getAppsWithNotifications(): List<String> = notificationDao.getDistinctPackageNames()
 }

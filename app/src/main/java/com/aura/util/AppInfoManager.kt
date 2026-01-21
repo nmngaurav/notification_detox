@@ -1,8 +1,11 @@
 package com.aura.util
 
+import android.app.AppOpsManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -57,6 +60,9 @@ class AppInfoManager @Inject constructor(
                     return@mapNotNull null
                 }
                 
+                // Check if app has FLAG_SYSTEM set
+                val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                
                 // Get installer package
                 val installer = try {
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
@@ -69,29 +75,42 @@ class AppInfoManager @Inject constructor(
                     null
                 }
                 
-                val isSystem = (appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                
 
                 
-                // Include if:
-                // 1. Installed from Play Store
-                val isFromPlayStore = installer == "com.android.vending"
-                
-                // 2. User-sideloaded (no installer)
-                val isSideloaded = installer == null && !isSystem
-                
-                // 3. Known notification apps (even if system)
+                // Known user-facing notification apps (can be system apps)
                 val knownNotificationApps = listOf(
                     "com.google.android.gm", // Gmail
                     "com.android.chrome",
                     "com.google.android.apps.messaging", // Messages
                     "com.whatsapp",
                     "com.facebook",
-                    "com.instagram.android"
+                    "com.instagram.android",
+                    "com.google.android.apps.docs", // Google Drive
+                    "com.google.android.apps.photos", // Google Photos
+                    "com.google.android.calendar", // Google Calendar
+                    "com.google.android.youtube" // YouTube
                 )
                 val isKnownApp = knownNotificationApps.any { packageName.startsWith(it) }
                 
-                if (!isFromPlayStore && !isSideloaded && !isKnownApp) {
+                // Include if:
+                // 1. Installed from Play Store (and not a system app, unless it's a known app)
+                val isFromPlayStore = installer == "com.android.vending"
+                
+                // 2. User-sideloaded (no installer and not a system app)
+                val isSideloaded = installer == null && !isSystem
+                
+                // 3. Known notification apps (allowed even if system)
+                
+                // Final decision: include only if one of the criteria is met
+                val shouldInclude = when {
+                    isKnownApp -> true // Always include known apps
+                    isSystem && !isKnownApp -> false // Exclude system apps unless they're known
+                    isFromPlayStore -> true // Include Play Store apps
+                    isSideloaded -> true // Include sideloaded apps
+                    else -> false // Exclude everything else
+                }
+                
+                if (!shouldInclude) {
                     return@mapNotNull null
                 }
                 
@@ -125,12 +144,33 @@ class AppInfoManager @Inject constructor(
             "com.android.inputmethod",
             "com.android.bluetooth",
             "com.android.nfc",
+            "com.android.documentsui",
+            "com.android.externalstorage",
+            "com.android.htmlviewer",
+            "com.android.mms.service",
+            "com.android.printspooler",
+            "com.android.proxyhandler",
+            "com.android.wallpaper",
+            "com.android.shell",
+            "com.android.sharedstoragebackup",
+            "com.android.statementservice",
+            "com.android.vpndialogs",
+            "com.android.keychain",
+            "com.android.location.fused",
+            "com.android.certinstaller",
             
             // Google Play Services (backend only)
             "com.google.android.gms",
             "com.google.android.gsf",
             "com.google.android.ext.services",
             "com.google.android.configupdater",
+            "com.google.android.webview",
+            "com.google.android.backuptransport",
+            "com.google.android.feedback",
+            "com.google.android.onetimeinitializer",
+            "com.google.android.partnersetup",
+            "com.google.android.setupwizard",
+            "com.google.android.syncadapters",
             
             // Package installer
             "com.google.android.packageinstaller",
@@ -143,15 +183,82 @@ class AppInfoManager @Inject constructor(
             "com.google.android.apps.wellbeing", // "Digital Wellbeing"
             "com.google.android.marvin.talkback", // "Android Accessibility Suite"
             "com.google.android.tts", // "Speech Recognition"
+            "com.google.android.overlay",
+            "com.google.android.permissioncontroller",
             
             // OEM system processes
             "com.motorola.actions",
             "com.samsung.android.app.settings",
-            "com.miui.system"
+            "com.samsung.android.app",
+            "com.miui.system",
+            "com.coloros",
+            "com.oppo.launcher"
         )
         
         // ONLY block if it starts with one of these patterns
         return trueSystemServices.any { packageName.startsWith(it) }
+    }
+
+    /**
+     * Checks if an app has notification permission enabled.
+     * Uses AppOpsManager to check notification permission for the given package.
+     * For Android M (API 23) and above, checks the actual permission state.
+     * For older versions, assumes enabled if app exists (pre-API 23 behavior).
+     */
+    fun hasNotificationPermission(packageName: String): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                val uid = packageManager.getPackageUid(packageName, 0)
+                
+                // Use string-based check for API 29+, reflection for API 23-28
+                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // API 29+: Use string-based check
+                    appOpsManager.checkOpNoThrow(
+                        "android:post_notification",
+                        uid,
+                        packageName
+                    )
+                } else {
+                    // API 23-28: Use reflection to call the int-based method
+                    // OP_POST_NOTIFICATION = 11
+                    try {
+                        val method = AppOpsManager::class.java.getMethod(
+                            "checkOpNoThrow",
+                            Int::class.javaPrimitiveType,
+                            Int::class.javaPrimitiveType,
+                            String::class.java
+                        )
+                        @Suppress("DEPRECATION")
+                        method.invoke(appOpsManager, 11, uid, packageName) as Int
+                    } catch (e: Exception) {
+                        // If reflection fails, exclude the app (return MODE_IGNORED)
+                        // This ensures we only show apps we can verify have notifications enabled
+                        return false
+                    }
+                }
+                // MODE_ALLOWED = 0, MODE_IGNORED = 1, MODE_ERRORED = 2
+                // Only return true if mode is explicitly MODE_ALLOWED
+                mode == AppOpsManager.MODE_ALLOWED
+            } else {
+                // For older versions (pre-API 23), notifications were always enabled by default
+                true
+            }
+        } catch (e: Exception) {
+            // If we can't check (e.g., app not found), exclude the app to be safe
+            false
+        }
+    }
+
+    /**
+     * Gets a filtered list of installed apps that have notification permissions enabled.
+     * This is useful for showing only apps that can actually send notifications.
+     */
+    fun getAppsWithNotificationPermission(): List<AppInfo> {
+        val allApps = getInstalledApps()
+        return allApps.filter { app ->
+            hasNotificationPermission(app.packageName)
+        }.sortedBy { it.label }
     }
 
     // V2: Smart App List for Onboarding - Only show High Noise apps (Social, Messaging)

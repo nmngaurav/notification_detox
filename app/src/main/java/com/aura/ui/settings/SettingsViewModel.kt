@@ -51,7 +51,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            _installedApps.value = appInfoManager.getInstalledApps()
+            _installedApps.value = appInfoManager.getAppsWithNotificationPermission()
         }
     }
 

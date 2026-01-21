@@ -29,4 +29,8 @@ interface NotificationDao {
 
     @Query("DELETE FROM notifications WHERE isBlocked = 1")
     suspend fun clearAllBlocked()
+    
+    // Get distinct package names from stored notifications
+    @Query("SELECT DISTINCT packageName FROM notifications")
+    suspend fun getDistinctPackageNames(): List<String>
 }

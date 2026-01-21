@@ -412,7 +412,11 @@ fun AppConfigSheet(
             
             // --- FOOTER (Fixed) ---
             Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 56.dp) // Increased padding to avoid gesture navigation interference
+            ) {
                 Button(
                     onClick = { onRemove() },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222), contentColor = Color.Red),
