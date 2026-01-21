@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,14 +31,6 @@ fun SettingsMenuScreen(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    
-    data class OtherApp(val name: String, val icon: ImageVector, val url: String, val color: Color)
-    val otherApps = listOf(
-        OtherApp("Read Fast", Icons.Default.Star, "https://play.google.com/store/apps/details?id=read.fast.app&hl=en_IN", Color(0xFF4CAF50)),
-        OtherApp("Money Tracker AI", Icons.Default.Check, "https://play.google.com/store/apps/details?id=money.tracker.ai", Color(0xFF2196F3)),
-        OtherApp("Summary AI", Icons.Default.List, "https://play.google.com/store/apps/details?id=summary.ai", Color(0xFF9C27B0))
-    )
-    
 
     Scaffold(
         topBar = {
@@ -117,57 +107,21 @@ fun SettingsMenuScreen(
                 )
             }
             
-            // Section 3: Community
-            item {
-                MenuSectionTitle("Community")
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(otherApps) { app ->
-                        GlassCard(
-                            modifier = Modifier.width(240.dp),
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(app.url))
-                                context.startActivity(intent)
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .background(app.color.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(app.icon, contentDescription = null, tint = app.color, modifier = Modifier.size(24.dp))
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text(
-                                        text = app.name,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                    Text("Get it", color = app.color, style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-             // Section 4: About
+             // Section 3: About
             item {
                 MenuSectionTitle("About")
                 Spacer(modifier = Modifier.height(8.dp))
+                MenuActionItem(
+                    title = "Privacy Policy",
+                    subtitle = "View our privacy policy",
+                    icon = Icons.Default.Lock,
+                    color = Color(0xFF4CAF50),
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pollen-winter-ac2.notion.site/Privacy-Policy-Aura-Notification-Detox-2efe0a1485fb80df9437ddb5f369b70a"))
+                        context.startActivity(intent)
+                    }
+                )
                 GlassCard(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),
