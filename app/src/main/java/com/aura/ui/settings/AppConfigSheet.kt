@@ -50,7 +50,7 @@ fun AppConfigSheet(
     val context = androidx.compose.ui.platform.LocalContext.current
     
     // 1. Tag Library Definition (Section -> Tags)
-    val tagSections = remember {
+    val allTagSections = remember {
         listOf(
             TagSection("Critical & Security", Icons.Default.Lock, listOf("OTPs", "Login Codes", "Fraud Alerts", "Calls", "Alarms")),
             TagSection("Social & Chat", Icons.Default.Email, listOf("DMs", "Group Chats", "Mentions", "Replies", "Voice Msgs")),
@@ -60,7 +60,72 @@ fun AppConfigSheet(
         )
     }
 
-    // 2. Smart Auto-Detection (API 26+)
+    // 2. Detect App Type to Filter Relevant Tags
+    val appType = remember(packageName) {
+        val pm = context.packageManager
+        var detectedType = "UNKNOWN"
+        
+        try {
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                detectedType = when (appInfo.category) {
+                    android.content.pm.ApplicationInfo.CATEGORY_SOCIAL -> "SOCIAL"
+                    android.content.pm.ApplicationInfo.CATEGORY_MAPS -> "MAPS"
+                    android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY -> "PRODUCTIVITY"
+                    android.content.pm.ApplicationInfo.CATEGORY_VIDEO -> "VIDEO"
+                    android.content.pm.ApplicationInfo.CATEGORY_AUDIO -> "AUDIO"
+                    android.content.pm.ApplicationInfo.CATEGORY_GAME -> "GAMING"
+                    else -> "UNKNOWN"
+                }
+            }
+        } catch (e: Exception) { /* Ignore */ }
+        
+        // Fallback: Package name heuristics
+        if (detectedType == "UNKNOWN") {
+            val pkg = packageName.lowercase()
+            detectedType = when {
+                pkg.contains("whatsapp") || pkg.contains("telegram") || pkg.contains("messenger") || 
+                pkg.contains("instagram") || pkg.contains("snapchat") || pkg.contains("twitter") || 
+                pkg.contains("discord") || pkg.contains("facebook") -> "SOCIAL"
+                pkg.contains("bank") || pkg.contains("pay") || pkg.contains("venmo") || 
+                pkg.contains("cashapp") || pkg.contains("paypal") || pkg.contains("chase") || 
+                pkg.contains("wells") || pkg.contains("citi") -> "FINANCE"
+                pkg.contains("uber") || pkg.contains("lyft") || pkg.contains("doordash") || 
+                pkg.contains("grubhub") || pkg.contains("instacart") || pkg.contains("fedex") || 
+                pkg.contains("ups") || pkg.contains("dhl") || pkg.contains("delivery") || 
+                pkg.contains("food") || pkg.contains("zomato") || pkg.contains("swiggy") -> "LOGISTICS"
+                pkg.contains("netflix") || pkg.contains("prime") || pkg.contains("hulu") || 
+                pkg.contains("disney") || pkg.contains("youtube") || pkg.contains("twitch") || 
+                pkg.contains("video") -> "VIDEO"
+                pkg.contains("spotify") || pkg.contains("pandora") || pkg.contains("soundcloud") || 
+                pkg.contains("music") || pkg.contains("audio") -> "AUDIO"
+                pkg.contains("calendar") || pkg.contains("gmail") || pkg.contains("outlook") || 
+                pkg.contains("slack") || pkg.contains("teams") || pkg.contains("zoom") -> "PRODUCTIVITY"
+                pkg.contains("maps") || pkg.contains("waze") -> "MAPS"
+                pkg.contains("game") || pkg.contains("gaming") || pkg.contains("clash") || 
+                pkg.contains("candy") || pkg.contains("duolingo") -> "GAMING"
+                else -> "UNKNOWN"
+            }
+        }
+        detectedType
+    }
+    
+    // 3. Filter Tag Sections Based on App Type
+    val tagSections = remember(appType) {
+        val relevantSectionTitles = when (appType) {
+            "SOCIAL" -> setOf("Critical & Security", "Social & Chat", "System")
+            "FINANCE" -> setOf("Critical & Security", "Money", "System")
+            "LOGISTICS" -> setOf("Critical & Security", "Logistics & Time", "System")
+            "VIDEO", "AUDIO" -> setOf("Critical & Security", "System")
+            "PRODUCTIVITY" -> setOf("Critical & Security", "Logistics & Time", "System")
+            "MAPS" -> setOf("Critical & Security", "Logistics & Time", "System")
+            "GAMING" -> setOf("Critical & Security", "System")
+            else -> setOf("Critical & Security", "Social & Chat", "Logistics & Time", "Money", "System") // Show all for unknown
+        }
+        allTagSections.filter { it.title in relevantSectionTitles }
+    }
+
+    // 4. Smart Auto-Detection (API 26+)
     val autoSelectedTags = remember(packageName) {
         val pm = context.packageManager
         val tags = mutableSetOf<String>()
@@ -129,48 +194,49 @@ fun AppConfigSheet(
             
             Spacer(modifier = Modifier.height(20.dp))
             
-            // Master Toggle
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { 
-                        // Toggle Logic: OPEN <-> SMART (Default)
-                        // If currently FORTRESS, clicking toggles to OPEN.
-                        if (selectedLevel == ShieldLevel.OPEN) {
-                             selectedLevel = ShieldLevel.SMART 
-                        } else {
-                             selectedLevel = ShieldLevel.OPEN
-                        }
-                    }
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Strict Blocking Mode",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (selectedLevel == ShieldLevel.OPEN) "Off: Allowing all notifications" else "Active: Blocking everything by default",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (selectedLevel == ShieldLevel.OPEN) Color.Gray else Color(0xFFDAA520)
-                        )
-                    }
-                    Switch(
-                        checked = selectedLevel != ShieldLevel.OPEN,
-                        onCheckedChange = { isChecked -> 
-                            selectedLevel = if (isChecked) ShieldLevel.SMART else ShieldLevel.OPEN 
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color(0xFFDAA520), checkedTrackColor = Color(0xFF332200),
-                            uncheckedThumbColor = Color.Gray, uncheckedTrackColor = Color(0xFF111111)
-                        )
+            // Unified Mode Selector
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Notification Mode",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    
+                    // Option 1: Allow All
+                    ModeOption(
+                        title = "Allow All",
+                        description = "Let everything through",
+                        icon = Icons.Default.CheckCircle,
+                        iconTint = Color.Green,
+                        selected = selectedLevel == ShieldLevel.OPEN,
+                        onClick = { selectedLevel = ShieldLevel.OPEN }
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Option 2: Smart Filter
+                    ModeOption(
+                        title = "Smart Filter",
+                        description = "Only allow what you choose below",
+                        icon = Icons.Default.Done,
+                        iconTint = Color(0xFFDAA520),
+                        selected = selectedLevel == ShieldLevel.SMART,
+                        onClick = { selectedLevel = ShieldLevel.SMART }
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Option 3: Block All
+                    ModeOption(
+                        title = "Block All",
+                        description = "Complete silence",
+                        icon = Icons.Default.Lock,
+                        iconTint = Color.Red,
+                        selected = selectedLevel == ShieldLevel.FORTRESS,
+                        onClick = { selectedLevel = ShieldLevel.FORTRESS }
                     )
                 }
             }
@@ -182,43 +248,13 @@ fun AppConfigSheet(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                 if (selectedLevel != ShieldLevel.OPEN) {
-                    // BLOCK ALL TOGGLE
-                    item {
-                        GlassCard(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                selectedLevel = if (selectedLevel == ShieldLevel.FORTRESS) ShieldLevel.SMART else ShieldLevel.FORTRESS
-                            }
-                        ) {
-                             Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                 Icon(
-                                     imageVector = if(selectedLevel == ShieldLevel.FORTRESS) Icons.Default.Lock else Icons.Default.Lock, // Could use Lock/Unlock
-                                     contentDescription = null,
-                                     tint = if(selectedLevel == ShieldLevel.FORTRESS) Color.Red else Color.Gray
-                                 )
-                                 Spacer(modifier = Modifier.width(16.dp))
-                                 Column(modifier = Modifier.weight(1f)) {
-                                     Text("Block Everything", color = Color.White, fontWeight = FontWeight.SemiBold)
-                                     Text("Silence this app completely. No exceptions.", color = Color.Gray, fontSize = 12.sp)
-                                 }
-                                 Checkbox(
-                                     checked = selectedLevel == ShieldLevel.FORTRESS,
-                                     onCheckedChange = { isChecked ->
-                                         selectedLevel = if (isChecked) ShieldLevel.FORTRESS else ShieldLevel.SMART
-                                     },
-                                     colors = CheckboxDefaults.colors(checkedColor = Color.Red, uncheckedColor = Color.Gray)
-                                 )
-                             }
-                        }
-                    }
-                 
                     if (selectedLevel == ShieldLevel.SMART) {
                         item {
-                            Text("ALLOWANCE RULES", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                            Text("WHAT TO ALLOW", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                             Text(
-                                text = "Select the specific types of alerts you want to let through. All others will be silenced.",
+                                text = "Tap what you want to see. Everything else gets blocked.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.DarkGray,
+                                color = Color.Gray,
                                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                                 lineHeight = 16.sp
                             )
@@ -292,7 +328,7 @@ fun AppConfigSheet(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                Icon(Icons.Default.Edit, contentDescription = null, tint = Color(0xFFDAA520), modifier = Modifier.size(18.dp))
                                Spacer(Modifier.width(10.dp))
-                               Text("CUSTOM KEYWORDS", style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                               Text("CUSTOM KEYWORDS (OPTIONAL)", style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.Bold)
                             }
                             
                             Spacer(Modifier.height(12.dp))
@@ -301,7 +337,7 @@ fun AppConfigSheet(
                             GlassCard {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
-                                        "Notifications containing these words will always be allowed:",
+                                        "Allow notifications with specific words:",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color.Gray,
                                         modifier = Modifier.padding(bottom = 12.dp)
@@ -379,13 +415,13 @@ fun AppConfigSheet(
                                     Spacer(Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = "AI Safety Net Active",
+                                            text = "AI Protection Active",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "Aura will intelligently rescue any critical alerts that slip through your filters.",
+                                            text = "Critical alerts (OTPs, fraud warnings) will still get through",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = Color.Gray,
                                             fontSize = 11.sp,
@@ -395,19 +431,7 @@ fun AppConfigSheet(
                                 }
                             }
                         }
-                    } else if (selectedLevel == ShieldLevel.FORTRESS) {
-                        // FORTRESS MODE EXPLANATION or EMPTY SPACE
-                        item {
-                            Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
-                                Text(
-                                    "Strict Blocking Enabled",
-                                    color = Color.Red.copy(alpha=0.7f),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
-                        }
                     }
-                 }
             }
             
             // --- FOOTER (Fixed) ---
@@ -449,6 +473,63 @@ fun AppConfigSheet(
 }
 
 data class TagSection(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tags: List<String>)
+
+@Composable
+fun ModeOption(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = if (selected) Color(0xFF222222) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .border(
+                width = 1.dp,
+                color = if (selected) iconTint.copy(alpha = 0.5f) else Color(0xFF333333),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) iconTint else Color.Gray,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (selected) Color.White else Color.Gray,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            )
+            Text(
+                text = description,
+                color = if (selected) iconTint.copy(alpha = 0.8f) else Color.DarkGray,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 12.sp
+            )
+        }
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = iconTint,
+                unselectedColor = Color.Gray
+            )
+        )
+    }
+}
 
 @Composable
 fun SmartFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
