@@ -218,4 +218,37 @@ class MainViewModel @Inject constructor(
             repository.deleteRule(packageName, mode)
         }
     }
+    
+    /**
+     * Bulk Config: Apply the same configuration to multiple apps at once.
+     * This is a premium feature that can be locked behind a paywall.
+     * 
+     * @param packageNames List of package names to update
+     * @param profileId The current focus profile ID
+     * @param shieldLevel The shield level to apply (OPEN, SMART, FORTRESS)
+     * @param categories Comma-separated category tags to allow
+     * @param keywords Comma-separated custom keywords to allow
+     */
+    fun applyBulkConfig(
+        packageNames: List<String>,
+        profileId: String,
+        shieldLevel: ShieldLevel,
+        categories: String,
+        keywords: String
+    ) {
+        viewModelScope.launch {
+            packageNames.forEach { packageName ->
+                repository.updateRule(
+                    AppRuleEntity(
+                        packageName = packageName,
+                        profileId = profileId,
+                        shieldLevel = shieldLevel,
+                        activeCategories = categories,
+                        customKeywords = keywords,
+                        lastUpdated = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+    }
 }
