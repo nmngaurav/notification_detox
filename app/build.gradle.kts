@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.aura"
-    compileSdk = 34
+    namespace = "aura.notification.filter"
+    compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.aura"
+        applicationId = "aura.notification.filter"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
