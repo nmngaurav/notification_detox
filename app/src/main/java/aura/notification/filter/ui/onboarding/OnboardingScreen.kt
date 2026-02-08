@@ -48,12 +48,13 @@ import aura.notification.filter.ui.components.ParticleSystem
 import kotlinx.coroutines.delay
 
 private enum class OnboardingStep {
-    SWARM, PAIN_POINTS, GATEWAY
+    SWARM, PAIN_POINTS, GATEWAY, INITIATION
 }
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun OnboardingScreen(
+    navController: androidx.navigation.NavController,
     onFinish: () -> Unit,
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
@@ -98,8 +99,14 @@ fun OnboardingScreen(
                      context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 },
                 onEnter = {
-                    viewModel.completeOnboarding()
-                    onFinish()
+                    currentStep = OnboardingStep.INITIATION
+                }
+            )
+            OnboardingStep.INITIATION -> InitiationStage(
+                onComplete = {
+                    navController.navigate("onboarding/app_picker") {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
                 }
             )
         }
@@ -932,6 +939,176 @@ fun PermissionTutorial() {
                              }
                          }
                     }
+                }
+            }
+        }
+    }
+}
+
+// ------------------------------------
+// STEP 4: INITIATION (The Scan)
+// ------------------------------------
+@Composable
+fun InitiationStage(onComplete: () -> Unit) {
+    val context = LocalContext.current
+    val appInfoManager = remember { aura.notification.filter.util.AppInfoManager(context) }
+    // We only want user apps for the visualization
+    val apps = remember { 
+        appInfoManager.getInstalledApps().filter { !appInfoManager.isSystemApp(it.packageName) }.shuffled() 
+    }
+    
+    // States
+    var scanState by remember { mutableStateOf("SCANNING") } // SCANNING, FOUND, READY
+    var detectedCount by remember { mutableIntStateOf(0) }
+    
+    // Animations
+    val transition = rememberInfiniteTransition(label = "Scanner")
+    val radarRotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing)),
+        label = "Radar"
+    )
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(tween(1000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "Pulse"
+    )
+    
+    // Logic Sequence
+    LaunchedEffect(Unit) {
+        delay(2500) // Scan for 2.5s
+        scanState = "FOUND"
+        
+        // Count up animation
+        val target = apps.take(20).size // Just show a realistic number
+        val start = System.currentTimeMillis()
+        while(detectedCount < target) {
+            detectedCount++
+            delay(50)
+        }
+        
+        delay(500)
+        scanState = "READY"
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color(0xFF050505)),
+        contentAlignment = Alignment.Center
+    ) {
+        // RADAR VISUALIZATION
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = center
+            val maxRadius = size.minDimension * 0.4f
+            
+            // Pulse Rings
+            drawCircle(
+                color = Color(0xFFDAA520).copy(alpha = pulseAlpha * 0.5f),
+                radius = maxRadius,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+            )
+             drawCircle(
+                color = Color(0xFFDAA520).copy(alpha = pulseAlpha * 0.3f),
+                radius = maxRadius * 0.6f,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
+            )
+            
+            // Sweep Gradient
+            rotate(degrees = radarRotation) {
+                drawCircle(
+                    brush = Brush.sweepGradient(
+                        0f to Color.Transparent,
+                        0.7f to Color.Transparent,
+                        1f to Color(0xFFDAA520).copy(alpha = 0.5f)
+                    ),
+                    radius = maxRadius
+                )
+            }
+        }
+        
+        // CENTRAL HUB & ICONS
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+             Spacer(modifier = Modifier.height(100.dp))
+             
+             // Dynamic Icon Stream
+             if (scanState == "SCANNING" && apps.isNotEmpty()) {
+                 Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
+                     var currentIconIndex by remember { mutableIntStateOf(0) }
+                     LaunchedEffect(Unit) {
+                         while(true) {
+                             currentIconIndex = (currentIconIndex + 1) % apps.size
+                             delay(150) // Fast cycle
+                         }
+                     }
+                     
+                     val app = apps[currentIconIndex]
+                     if (app.icon != null) {
+                        androidx.compose.ui.viewinterop.AndroidView(
+                             factory = { ctx -> android.widget.ImageView(ctx) },
+                             update = { view -> 
+                                 view.setImageDrawable(app.icon) 
+                                 view.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                             },
+                             modifier = Modifier.size(64.dp).alpha(0.8f)
+                        )
+                     }
+                 }
+             } else {
+                 // Result Icon
+                  Icon(
+                     imageVector = Icons.Default.Check,
+                     contentDescription = null,
+                     tint = Color(0xFFDAA520),
+                     modifier = Modifier.size(80.dp)
+                 )
+             }
+             
+             Spacer(modifier = Modifier.height(32.dp))
+             
+             // TEXT UPDATES
+             AnimatedContent(targetState = scanState, label = "ScanText") { state ->
+                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                     when(state) {
+                         "SCANNING" -> {
+                             Text("ANALYZING APP ECOSYSTEM...", color = Color.Gray, style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp)
+                             Spacer(Modifier.height(8.dp))
+                             Text("Identifying potential noise...", color = Color.DarkGray, fontSize = 12.sp)
+                         }
+                         "FOUND", "READY" -> {
+                             Text("ANALYSIS COMPLETE", color = Color(0xFFDAA520), style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
+                             Spacer(Modifier.height(16.dp))
+                             Text(
+                                 "Potential distraction sources identified.", 
+                                 color = Color.White, 
+                                 style = MaterialTheme.typography.titleMedium,
+                                 textAlign = TextAlign.Center
+                             )
+                         }
+                     }
+                 }
+             }
+        }
+        
+        // BOTTOM ACTION
+        Box(
+            modifier = Modifier.fillMaxSize().padding(32.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            AnimatedVisibility(
+                visible = scanState == "READY",
+                enter = slideInVertically { it } + fadeIn()
+            ) {
+                 Button(
+                    onClick = onComplete,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFDAA520),
+                        contentColor = Color.Black
+                    ),
+                    modifier = Modifier.height(56.dp).fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Select Apps to Filter", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
             }
         }

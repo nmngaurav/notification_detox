@@ -11,6 +11,7 @@ data class AppRuleEntity(
     val shieldLevel: ShieldLevel = ShieldLevel.SMART,
     val filterTemplate: DetoxCategory = DetoxCategory.SOCIAL, // Legacy for single template
     val activeCategories: String = "", // Comma-separated DetoxCategory names
+    val activeSmartTags: String = "", // V2: Comma-separated Smart Tags (e.g. "OTP,Money")
     val customKeywords: String = "", // Comma-separated allow/block keywords
     
     val lastUpdated: Long = System.currentTimeMillis()

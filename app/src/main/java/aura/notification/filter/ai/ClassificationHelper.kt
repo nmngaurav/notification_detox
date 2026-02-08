@@ -13,11 +13,11 @@ class ClassificationHelper @Inject constructor(
 ) {
 
     suspend fun classify(title: String, content: String, packageName: String): String {
-        // TIER 1: Local Heuristics (<10ms) - CONTENT IS KING
+        // TIER 1: Local Heuristics (<10ms) - SAFETY NET
         // We run this FIRST so that even if "Gaurav" is cached as "social", his "Emergency" message breaks through.
-        heuristicEngine.fastClassify(packageName, title, content)?.let {
-            Log.d("ClassificationHelper", "Heuristic Verdict: $it for $title")
-            return it
+        if (heuristicEngine.isCritical(title, content)) {
+             Log.d("ClassificationHelper", "Heuristic Verdict: CRITICAL for $title")
+             return HeuristicEngine.CAT_CRITICAL
         }
 
         // TIER 2: Decision Cache (<5ms)
@@ -45,7 +45,6 @@ class ClassificationHelper @Inject constructor(
         } catch (e: Exception) {
             Log.w("ClassificationHelper", "AI failed, using fallback: ${e.message}")
             // Fallback: Default to NOISE to be safe (over-blocking is better than under-blocking in V3)
-            // But if unsure, maybe Productivity? V3 plan said fallback is TBD. Let's use NOISE.
             HeuristicEngine.CAT_NOISE
         }
     }
@@ -60,9 +59,14 @@ class ClassificationHelper @Inject constructor(
                  }
 
                  val prompt = """
-                     Summarize these notifications from $packageName concisely.
-                     You may use multiple lines or bullet points if necessary for clarity.
-                     If any message seems CRITICAL (emergency, money lost, otp), start the summary with "URGENT:".
+                     You are a personal concierge. Summarize the SUBSTANCE of these notifications from $packageName.
+                     
+                     Rules:
+                     - Do NOT describe the general kind of talk (e.g., instead of 'They are discussing dinner', say 'Dinner planned at 8 PM at Pizza Hut').
+                     - Identify exactly WHAT is happening or being requested.
+                     - Use a direct, narrative tone. Be concise but substantive.
+                     - Use '⚡' to lead clear ACTION ITEMS.
+                     - Use 'URGENT:' only for security, money, or emergency alerts.
                      
                      Notifications:
                      ${limitedList.joinToString("\n") { "- $it" }}
@@ -70,7 +74,7 @@ class ClassificationHelper @Inject constructor(
                  
                  val request = OpenAIRequest(
                     messages = listOf(
-                        Message("system", "You are a helpful assistant. Be concise."),
+                        Message("system", "You are an expert personal concierge. Be brief, narrative, and highly descriptive."),
                         Message("user", prompt)
                     )
                  )
@@ -103,13 +107,15 @@ class ClassificationHelper @Inject constructor(
             Content: $content
             
             Rules:
-            - "critical": OTPs, codes, security, emergency, bank debit, calls.
+            - "critical": OTPs, codes, security, emergency (hospital, accident, safety), bank debit, call from family.
             - "productivity": Work docs, teams, slack, calendar invites, system info.
             - "logistics": Deliveries, food arrival, shipping updates, tracking info.
             - "events": Concerts, starting news, live streams, tickets, gym reminders.
             - "social": Direct messages, personal chats, @mentions.
             - "gamification": Streaks, daily rewards, game invites, points, levels.
             - "noise": Sales, marketing, group chat reactions, likes, generic feed updates.
+            
+            IMPORTANT: If the message implies ANY physical or financial danger, safety emergency, or immediate family urgency, ALWAYS use "critical".
             
             Response format: Just the category name in lowercase.
         """.trimIndent()
@@ -135,9 +141,5 @@ class ClassificationHelper @Inject constructor(
             HeuristicEngine.CAT_NOISE -> category
             else -> HeuristicEngine.CAT_PRODUCTIVITY // Safe default
         }
-    }
-
-    private fun classifyWithHeuristics(packageName: String, title: String, content: String): String {
-        return heuristicEngine.fastClassify(packageName, title, content) ?: HeuristicEngine.CAT_NOISE
     }
 }

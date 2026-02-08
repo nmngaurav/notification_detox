@@ -37,73 +37,61 @@ class AuraNotificationService : NotificationListenerService() {
         if (packageName == "aura.notification.filter") return
         
         val extras = sbn.notification.extras
-        val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
-        val mainText = extras.getString(Notification.EXTRA_TEXT) ?: ""
+        // SAFE EXTRACTION: Use getCharSequence() to prevent ClassCastException on Spannable text
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
+        val mainText = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         
         val isGroupSummary = (sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0
+        val isConversation = extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) || 
+                           extras.containsKey("android.isConversation") ||
+                           sbn.notification.getShortcutId() != null
 
         val content = if (isGroupSummary) {
-            // Group Summary Logic:
-            // Inspect ONLY the LATEST line from history to avoid "Sticky Urgency" (old urgent messages).
-            // But still catch the "Current Urgency" if the newest message is critical.
             val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
             val latestLine = lines?.lastOrNull()?.toString() ?: ""
             "$mainText $latestLine"
         } else {
-            // Individual Child Notification: Use its own text.
-            extras.getString(Notification.EXTRA_TEXT) ?: ""
+            mainText
         }
         
-        val isGroupConversation = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            extras.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION)
-        } else {
-            // Header-based heuristic for older Androids
-            title.contains(":") || title.contains("group", ignoreCase = true)
-        }
-
         scope.launch {
-            // ... (Ongoing check lines 61-65 skipped in replace, assuming context matches) 
-            
             if (sbn.isOngoing || !sbn.isClearable) {
                 return@launch
             }
 
             // 1. Configured Apps Only Logic
-            val ruleEntity = repository.getRuleForPackage(packageName)
-            if (ruleEntity == null) {
-                 Log.v("AuraService", "No rule for $packageName - Allowing passthrough.")
-                 return@launch
-            }
+            val ruleEntity = repository.getRuleForPackage(packageName) ?: return@launch
 
-            val shieldLevel = ruleEntity.shieldLevel
-            val activeTags = ruleEntity.activeCategories.split(",").filter { it.isNotEmpty() }.toSet()
             val customRules = ruleEntity.customKeywords.lowercase()
             
             // TIER 1 & 2: Explicit Allowlist (Tags & Keywords)
-            val (isAllowedByTag, tagReason) = checkTagsAndRules(title, content, packageName, activeTags, customRules, isGroupConversation)
+            val combinedText = "$title $content".lowercase()
+            val (isAllowedByTag, tagReason) = if (customRules.isNotEmpty() && customRules.split(",").any { it.trim().isNotEmpty() && combinedText.contains(it.trim()) }) {
+                 true to "Custom Rule"
+            } else {
+                 heuristicEngine.isAllowedByTags(
+                    title = title, 
+                    content = content, 
+                    activeTagsCSV = ruleEntity.activeCategories,
+                    packageName = packageName,
+                    isConversation = isConversation
+                 )
+            }
             
             if (isAllowedByTag) {
                 Log.d("AuraService", "Allowed by Tag/Rule: $tagReason")
                 return@launch
             }
             
-            // If we are here, it is NOT explicitly allowed.
-            // DEFAULT: BLOCK.
-            // But before blocking, we run TIER 3: AI RESCUE.
-            
-            // TIER 3: AI Context Rescue (The Safety Net)
-            // We ask AI: "Is this CRITICAL?"
+            // ... (AI Rescue same as before)
             val aiVerdict = classifier.classify(title, content, packageName)
             
             if (aiVerdict == aura.notification.filter.ai.HeuristicEngine.CAT_CRITICAL) {
-                // RESCUE!
-                triggerRescueNotification(packageName, title) // Optional: Badge it?
+                triggerRescueNotification(packageName, title)
                 Log.d("AuraService", "RESCUED by AI: $title (Critical)")
                 return@launch
             }
             
-            // FINAL VERDICT: BLOCK
-            // Log it for the user to see in their timeline
             Log.d("AuraService", "Blocked by Default: $title (AI Verdict: $aiVerdict)")
             
             if (!isGroupSummary) {
@@ -122,97 +110,7 @@ class AuraNotificationService : NotificationListenerService() {
         }
     }
 
-    // Helper: V8 Checks (Regex/Heuristic)
-    private fun checkTagsAndRules(
-        title: String, 
-        content: String, 
-        packageName: String, 
-        tags: Set<String>, 
-        customRules: String,
-        isGroupConversation: Boolean
-    ): Pair<Boolean, String> {
-        val lowerTitle = title.lowercase()
-        val lowerContent = content.lowercase()
-        val combined = "$lowerTitle $lowerContent"
 
-        // 1. Custom Keywords (Tier 2 - User Defined)
-        if (customRules.isNotEmpty()) {
-            val rules = customRules.split(",").map { it.trim() }
-            if (rules.any { it.isNotEmpty() && combined.contains(it) }) {
-                return true to "Custom Rule"
-            }
-        }
-        
-        if (tags.isEmpty()) return false to ""
-
-        // --- SECURITY & CRITICAL ---
-        if (tags.contains("OTPs") || tags.contains("Login Codes")) {
-            if (combined.contains("otp") || combined.contains("code") || combined.contains("verification") || combined.contains("password") || combined.contains("reset")) return true to "Security"
-        }
-        if (tags.contains("Calls")) {
-            if (combined.contains("call") || combined.contains("voice") || combined.contains("video") || combined.contains("missed")) return true to "Call"
-        }
-        if (tags.contains("Alarms") || tags.contains("Fraud Alerts")) {
-             if (combined.contains("alarm") || combined.contains("alert") || combined.contains("fraud") || combined.contains("suspicious")) return true to "Alarm/Fraud"
-        }
-
-        // --- SOCIAL & CHAT (Advanced Group Logic) ---
-        // Mentions (@) & Replies work in BOTH DMs and Groups
-        if (tags.contains("Mentions") || tags.contains("Replies")) {
-             if (combined.contains("@") || combined.contains("replied") || combined.contains("reply")) return true to "Mention/Reply"
-        }
-        
-        // DMs (Strictly 1-on-1)
-        if (tags.contains("DMs")) {
-            // IF isGroupConversation is FALSE -> It's a DM -> Allow
-            // IF isGroupConversation is TRUE -> It's a Group -> Ignore [DM] tag (Must rely on [Group Chats] or [Mentions])
-            if (!isGroupConversation) {
-                // Heuristic confirmation for API < 28 or raw apps
-                val likelyGroup = lowerTitle.contains(":") || lowerTitle.contains("group")
-                if (!likelyGroup) return true to "Direct Message"
-            }
-        }
-        
-        // Group Chats (Explicit Opt-in)
-        if (tags.contains("Group Chats")) {
-             if (isGroupConversation || lowerTitle.contains("group") || lowerTitle.contains(":")) return true to "Group Chat"
-        }
-        
-        if (tags.contains("Voice Msgs")) {
-            if (combined.contains("voice message") || combined.contains("audio")) return true to "Voice Msg"
-        }
-
-        // --- LOGISTICS & TIME ---
-        if (tags.contains("Rides") || tags.contains("Traffic")) {
-             if (combined.contains("arriving") || combined.contains("driver") || combined.contains("pickup") || combined.contains("traffic") || combined.contains("min away")) return true to "Transport"
-        }
-        if (tags.contains("Delivery")) {
-             if (combined.contains("delivery") || combined.contains("order") || combined.contains("food") || combined.contains("shipped") || combined.contains("out for")) return true to "Delivery"
-        }
-        if (tags.contains("Reminders") || tags.contains("Calendar")) {
-             if (combined.contains("reminder") || combined.contains("event") || combined.contains("meeting") || combined.contains("tomorrow") || combined.contains("starting")) return true to "Schedule"
-        }
-
-        // --- MONEY ---
-        if (tags.contains("Transaction") || tags.contains("Salary") || tags.contains("Bill Due")) {
-             if (combined.contains("spent") || combined.contains("credited") || combined.contains("debited") || combined.contains("salary") || combined.contains("bill") || combined.contains("due")) return true to "Finance"
-        }
-        if (tags.contains("Offers")) {
-             // Dangerous tag! Only allow if explicitly checking for "discount" etc but usually we block this.
-             // User explicitly asked for it? If selected, allow.
-             if (combined.contains("offer") || combined.contains("discount") || combined.contains("sale")) return true to "Offer"
-        }
-
-        // --- SYSTEM ---
-        if (tags.contains("Updates") || tags.contains("Downloads") || tags.contains("System")) {
-             if (combined.contains("update") || combined.contains("download") || combined.contains("installing") || combined.contains("battery") || combined.contains("usb")) return true to "System"
-        }
-        if (tags.contains("Reviews")) {
-             if (combined.contains("review") || combined.contains("rating") || combined.contains("star") || combined.contains("feedback")) return true to "Review"
-        }
-
-        return false to ""
-    }
     
     // ... rescue notification helper remains ...
     private fun triggerRescueNotification(originPackage: String, originTitle: String) {

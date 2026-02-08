@@ -18,6 +18,7 @@ interface NotificationRepository {
     fun getBlockedNotificationsForPackage(packageName: String): Flow<List<NotificationEntity>>
     suspend fun clearNotificationsForPackage(packageName: String)
     suspend fun clearAllBlocked()
+    suspend fun pruneOldNotifications(threshold: Long)
     
     fun getAllNotifications(): Flow<List<NotificationEntity>>
     fun getAllRules(): Flow<List<AppRuleEntity>>
@@ -69,6 +70,10 @@ class NotificationRepositoryImpl @Inject constructor(
 
     override suspend fun clearAllBlocked() {
         notificationDao.clearAllBlocked()
+    }
+
+    override suspend fun pruneOldNotifications(threshold: Long) {
+        notificationDao.deleteOldNotifications(threshold)
     }
 
     override fun getAllNotifications(): Flow<List<NotificationEntity>> = notificationDao.getAllNotifications()

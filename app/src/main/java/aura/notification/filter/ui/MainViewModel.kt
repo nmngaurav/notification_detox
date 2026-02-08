@@ -8,11 +8,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import aura.notification.filter.ui.dashboard.NotificationBurst
 
 import aura.notification.filter.billing.BillingManager
 import aura.notification.filter.util.AppInfoManager
@@ -36,6 +38,10 @@ class MainViewModel @Inject constructor(
         // Seed default rules on first run
         viewModelScope.launch {
             profileSeeder.seedIfNeeded()
+            
+            // Trigger 24h retention policy
+            val threshold = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
+            repository.pruneOldNotifications(threshold)
         }
     }
 
@@ -66,8 +72,7 @@ class MainViewModel @Inject constructor(
     fun isSystemApp(packageName: String) = appInfoManager.isSystemApp(packageName)
 
     val isPro = billingManager.isPro
-        .map { true } // Force TRUE for User Testing/Demo
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
 
 
@@ -178,6 +183,25 @@ class MainViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    // --- V2 SMART TIMELINE (Persistent Stacking: 1 App = 1 Card) ---
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val timelineState = blockedNotifications.map { notifications ->
+        notifications.groupBy { it.packageName }
+            .map { (packageName, list) ->
+                // Sort notifications within stack by newest first
+                val sortedNotes = list.sortedByDescending { it.timestamp }
+                val latestTimestamp = sortedNotes.first().timestamp
+                
+                NotificationBurst(
+                    id = "stack_$packageName", 
+                    packageName = packageName,
+                    timestamp = latestTimestamp,
+                    notifications = sortedNotes
+                )
+            }
+            .sortedByDescending { it.timestamp } // Global sort: App with newest message at top
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Expose active rules for Dashboard "Active Filters" list
     // Expose active rules for Dashboard "Active Filters" list (Profile Aware)
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -212,10 +236,37 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // FIX: Expose rule fetching for AppNavigation (Keywords Persistence Bug)
+    suspend fun getRule(packageName: String): AppRuleEntity? {
+        return repository.getRuleForPackage(packageName)
+    }
+
+    fun clearActivityForPackage(packageName: String) {
+        viewModelScope.launch {
+            // Log Fix: Only clear logs, leave rules intact
+            repository.clearNotificationsForPackage(packageName)
+            
+            // Clear local caches for this app's logs
+            _summaries.remove(packageName)
+            _perAppViewMode.remove(packageName)
+            _lastSummaryCounts.remove(packageName)
+        }
+    }
+
     fun removeRule(packageName: String) {
         viewModelScope.launch {
             val mode = _currentMode.value.name
+            
+            // 1. Remove Rule from DB
             repository.deleteRule(packageName, mode)
+            
+            // 2. Clear Blocked Logs (Bug Fix)
+            repository.clearNotificationsForPackage(packageName)
+            
+            // 3. Clear Local Caches
+            _summaries.remove(packageName)
+            _perAppViewMode.remove(packageName)
+            _lastSummaryCounts.remove(packageName)
         }
     }
     

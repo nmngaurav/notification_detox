@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import aura.notification.filter.data.AppRuleDao
 import aura.notification.filter.data.AuraDatabase
+import aura.notification.filter.data.MIGRATION_5_6
 import aura.notification.filter.data.NotificationDao
 import dagger.Module
 import dagger.Provides
@@ -23,7 +24,9 @@ object DatabaseModule {
             context,
             AuraDatabase::class.java,
             "aura_database"
-        ).fallbackToDestructiveMigration() // For MVP dev speed
+        )
+        .addMigrations(MIGRATION_5_6)
+        .fallbackToDestructiveMigration() // Keep fallback just in case, but migration covers 5->6
          .build()
     }
 

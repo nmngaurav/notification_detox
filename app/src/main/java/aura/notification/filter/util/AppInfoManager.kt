@@ -110,6 +110,12 @@ class AppInfoManager @Inject constructor(
                     else -> false // Exclude everything else
                 }
                 
+                // User Feedback Fix: Ensure app is launchable (hides background services like Key Verifier)
+                val isLaunchable = packageManager.getLaunchIntentForPackage(packageName) != null
+                if (!shouldInclude || !isLaunchable) {
+                    return@mapNotNull null
+                }
+                
                 if (!shouldInclude) {
                     return@mapNotNull null
                 }

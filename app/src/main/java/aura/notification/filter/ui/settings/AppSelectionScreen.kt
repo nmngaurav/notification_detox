@@ -73,6 +73,7 @@ fun AppSelectionScreen(
             appName = app.label,
             packageName = app.packageName,
             icon = app.icon,
+            isPro = isPro,
             currentShieldLevel = ShieldLevel.SMART,
             initialCategories = "",
             keywords = "", 

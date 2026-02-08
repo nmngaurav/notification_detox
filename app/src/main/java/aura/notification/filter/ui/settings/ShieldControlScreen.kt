@@ -38,6 +38,7 @@ fun ShieldControlScreen(
 ) {
     val rules by viewModel.rules.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
+    val isPro by viewModel.isPro.collectAsState()
     var selectedRule by remember { mutableStateOf<aura.notification.filter.data.AppRuleEntity?>(null) }
     
     Scaffold(
@@ -73,6 +74,7 @@ fun ShieldControlScreen(
                 appName = appInfo.label,
                 packageName = selectedRule!!.packageName,
                 icon = appInfo.icon,
+                isPro = isPro,
                 currentShieldLevel = selectedRule!!.shieldLevel,
                 initialCategories = selectedRule!!.activeCategories,
                 keywords = selectedRule!!.customKeywords,
