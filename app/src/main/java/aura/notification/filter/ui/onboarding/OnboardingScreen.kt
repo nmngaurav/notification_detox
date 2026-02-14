@@ -1,5 +1,4 @@
 package aura.notification.filter.ui.onboarding
-
 import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
@@ -7,6 +6,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
@@ -18,9 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -43,23 +42,35 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import aura.notification.filter.service.AuraNotificationService
+import androidx.navigation.NavController
+import aura.notification.filter.ui.components.borderBeam
+import aura.notification.filter.service.BlockerNotificationService
 import aura.notification.filter.ui.components.ParticleSystem
 import kotlinx.coroutines.delay
 
+
 private enum class OnboardingStep {
-    SWARM, PAIN_POINTS, GATEWAY, INITIATION
+    CHAOS, PAIN_POINTS, GATEWAY, INITIATION
 }
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun OnboardingScreen(
-    navController: androidx.navigation.NavController,
+    navController: NavController,
     onFinish: () -> Unit,
+    startStep: String? = null,
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
+    aura.notification.filter.ui.theme.AuraTheme {
     val context = LocalContext.current
-    var currentStep by remember { mutableStateOf(OnboardingStep.SWARM) }
+    var currentStep by remember { 
+        mutableStateOf(
+            when(startStep) {
+                "GATEWAY" -> OnboardingStep.GATEWAY
+                else -> OnboardingStep.CHAOS
+            }
+        ) 
+    }
     
     // Permission State
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -68,7 +79,7 @@ fun OnboardingScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                val componentName = ComponentName(context, AuraNotificationService::class.java)
+                val componentName = ComponentName(context, aura.notification.filter.service.BlockerNotificationService::class.java)
                 val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
                 hasNotificationAccess = flat != null && flat.contains(componentName.flattenToString())
                 
@@ -87,16 +98,16 @@ fun OnboardingScreen(
         label = "OnboardingNav"
     ) { step ->
         when (step) {
-            OnboardingStep.SWARM -> SwarmStage(
-                onComplete = { currentStep = OnboardingStep.PAIN_POINTS }
-            )
-            OnboardingStep.PAIN_POINTS -> PainPointsStage(
-                onComplete = { currentStep = OnboardingStep.GATEWAY }
-            )
+            OnboardingStep.CHAOS -> SwarmStage(onComplete = { currentStep = OnboardingStep.PAIN_POINTS })
+            OnboardingStep.PAIN_POINTS -> PainPointsStage(onComplete = { currentStep = OnboardingStep.GATEWAY })
             OnboardingStep.GATEWAY -> GatewayStage(
                 hasPermission = hasNotificationAccess,
                 onRequestPermission = {
-                     context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+                    }
+                    context.startActivity(intent)
                 },
                 onEnter = {
                     currentStep = OnboardingStep.INITIATION
@@ -104,17 +115,17 @@ fun OnboardingScreen(
             )
             OnboardingStep.INITIATION -> InitiationStage(
                 onComplete = {
-                    navController.navigate("onboarding/app_picker") {
-                        popUpTo("onboarding") { inclusive = true }
-                    }
+                    // Regression Fix: Don't complete here. Wait for Celebration.
+                    onFinish()
                 }
             )
         }
     }
 }
+}
 
 // ------------------------------------
-// STEP 1: THE SWARM (Chaos & Cleansing)
+// STEP 1: CHAOS (Environmental Cleansing)
 // ------------------------------------
 @Composable
 fun SwarmStage(onComplete: () -> Unit) {
@@ -372,7 +383,7 @@ fun SwarmStage(onComplete: () -> Unit) {
             val displayText = when {
                 isStabilizing -> "" // No text during hold (progress ring visible)
                 touchPoint != null -> "KEEP HOLDING..."
-                else -> "HOLD TO TAKE CONTROL"
+                else -> "HOLD TO BEGIN AURA"
             }
             
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -400,7 +411,7 @@ fun PainPointsStage(onComplete: () -> Unit) {
     val particleSystem = remember { aura.notification.filter.ui.components.ParticleSystem(1000) }
     
     // Pager State
-    val pagerState = rememberPagerState(pageCount = { 4 })
+    val pagerState = rememberPagerState(pageCount = { 3 })
     
     // Haptic on Page Change
     LaunchedEffect(pagerState.currentPage) {
@@ -577,9 +588,8 @@ fun PainPointStoryPage(
 ) {
     val content = when(page) {
         0 -> Triple("~150", "Phone Unlocks", "Triggered by notifications daily.")
-        1 -> Triple("~23 min", "Lost Focus", "To recover flow after just one buzz.")
-        2 -> Triple("+40%", "Stress Level", "Phantom vibrations keep you on edge.")
-        3 -> Triple("0", "Interruptions", "Reclaim your mind with Aura Filter.")
+        1 -> Triple("+40%", "Stress Level", "Phantom vibrations keep you on edge.")
+        2 -> Triple("0", "Interruptions", "Reclaim your mind with Aura.")
         else -> Triple("", "", "")
     }
     
@@ -630,7 +640,7 @@ fun PainPointStoryPage(
                 modifier = Modifier.offset(y = slideY)
             )
             
-            if (page == 3) {
+            if (page == 2) {
                  Spacer(modifier = Modifier.height(48.dp))
                  AnimatedVisibility(
                      visible = isSelected,
@@ -668,7 +678,7 @@ fun DecoderText(text: String, style: TextStyle, color: Color) {
 }
 
 // ------------------------------------
-// STEP 3: GATEWAY (Permission)
+// STEP 3: SETUP (Access)
 // ------------------------------------
 @Composable
 fun GatewayStage(
@@ -701,7 +711,7 @@ fun GatewayStage(
             Spacer(modifier = Modifier.weight(0.65f))
             
             Text(
-                text = "ENABLE AURA",
+                text = "ACTIVATE AURA",
                 color = Color.White,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold,
@@ -723,9 +733,7 @@ fun GatewayStage(
                         shape = RoundedCornerShape(16.dp),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("ENTER AURA", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("START", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
                 } else {
                      Button(
@@ -738,11 +746,12 @@ fun GatewayStage(
                             .height(60.dp)
                             .fillMaxWidth()
                             .scale(pulseScale)
-                            .border(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(16.dp)), // Gold border
+                            .border(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(16.dp)) // Gold border
+                            .borderBeam(width = 2.dp, shape = RoundedCornerShape(16.dp)),
                         shape = RoundedCornerShape(16.dp),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 12.dp, pressedElevation = 4.dp)
                     ) {
-                        Text("GRANT PERMISSION", fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.sp)
+                        Text("ACTIVATE NOW", fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.sp)
                     }
                 }
             }
@@ -767,11 +776,16 @@ fun GatewayStage(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = Color(0xFF111111)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = Color.DarkGray, modifier = Modifier.size(24.dp))
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Image(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            colorFilter = ColorFilter.tint(Color(0xFFDAA520)),
+                            modifier = Modifier.size(24.dp)
+                        )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
@@ -782,7 +796,7 @@ fun GatewayStage(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Your personal data stays on this device. Aura operates locally and respects your digital privacy.",
+                            text = "Your personal data stays on this device. Aura operates locally and privately, respecting your digital privacy.",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.Gray,
                             lineHeight = 16.sp
@@ -946,7 +960,7 @@ fun PermissionTutorial() {
 }
 
 // ------------------------------------
-// STEP 4: INITIATION (The Scan)
+// STEP 4: SCAN (Finding Apps)
 // ------------------------------------
 @Composable
 fun InitiationStage(onComplete: () -> Unit) {
@@ -994,7 +1008,10 @@ fun InitiationStage(onComplete: () -> Unit) {
     }
 
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0xFF050505)),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF050505))
+            .statusBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
         // RADAR VISUALIZATION
@@ -1071,9 +1088,9 @@ fun InitiationStage(onComplete: () -> Unit) {
                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
                      when(state) {
                          "SCANNING" -> {
-                             Text("ANALYZING APP ECOSYSTEM...", color = Color.Gray, style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp)
+                             Text("FINDING APPS...", color = Color.Gray, style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp)
                              Spacer(Modifier.height(8.dp))
-                             Text("Identifying potential noise...", color = Color.DarkGray, fontSize = 12.sp)
+                             Text("Finding apps that send notifications...", color = Color.DarkGray, fontSize = 12.sp)
                          }
                          "FOUND", "READY" -> {
                              Text("ANALYSIS COMPLETE", color = Color(0xFFDAA520), style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
@@ -1105,7 +1122,10 @@ fun InitiationStage(onComplete: () -> Unit) {
                         containerColor = Color(0xFFDAA520),
                         contentColor = Color.Black
                     ),
-                    modifier = Modifier.height(56.dp).fillMaxWidth(),
+                    modifier = Modifier
+                        .height(56.dp)
+                        .fillMaxWidth()
+                        .borderBeam(width = 2.dp, shape = RoundedCornerShape(16.dp)),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text("Select Apps to Filter", fontWeight = FontWeight.Bold, fontSize = 16.sp)

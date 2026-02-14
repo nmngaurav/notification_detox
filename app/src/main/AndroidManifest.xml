@@ -16,7 +16,7 @@
         tools:ignore="ProtectedPermissions" />
 
     <application
-        android:name=".AuraApplication"
+        android:name=".BlockerApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -37,7 +37,7 @@
             </intent-filter>
         </activity>
 
-        <service android:name=".service.AuraNotificationService"
+        <service android:name=".service.BlockerNotificationService"
             android:label="@string/service_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">

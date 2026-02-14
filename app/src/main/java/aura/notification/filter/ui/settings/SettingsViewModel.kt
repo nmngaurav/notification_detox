@@ -22,7 +22,8 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val repository: NotificationRepository,
     val billingManager: BillingManager,
-    private val appInfoManager: aura.notification.filter.util.AppInfoManager
+    private val appInfoManager: aura.notification.filter.util.AppInfoManager,
+    val analyticsManager: aura.notification.filter.util.AnalyticsManager
 ) : ViewModel() {
 
     // Fetch all rules for STANDARD profile (default for now)

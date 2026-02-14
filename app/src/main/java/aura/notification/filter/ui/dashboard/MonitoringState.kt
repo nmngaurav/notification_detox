@@ -2,6 +2,7 @@ package aura.notification.filter.ui.dashboard
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -47,12 +48,19 @@ fun MonitoringState(appCount: Int, accentColor: Color) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(contentAlignment = Alignment.Center) {
-            // Pulse Ring
+            // Dual-Pulse Ring
             Box(
                 modifier = Modifier
                     .size(80.dp)
                     .scale(scale)
                     .background(accentColor.copy(alpha = alpha), CircleShape)
+                    .border(1.dp, accentColor.copy(alpha = alpha), CircleShape)
+            )
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .scale(scale * 1.2f)
+                    .background(accentColor.copy(alpha = alpha * 0.4f), CircleShape)
             )
             // Icon
             Icon(
@@ -60,24 +68,36 @@ fun MonitoringState(appCount: Int, accentColor: Color) {
                 contentDescription = null,
                 tint = accentColor,
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(64.dp)
                     .background(Color(0xFF1E1E1E), CircleShape)
-                    .padding(12.dp)
+                    .padding(16.dp)
+                    .border(2.dp, accentColor.copy(alpha = 0.3f), CircleShape)
             )
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
         Text(
-            text = "Aura is Active",
-            style = MaterialTheme.typography.titleLarge,
+            text = "Aura Protection Active",
+            style = MaterialTheme.typography.headlineSmall,
             color = Color.White,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Monitoring $appCount apps for distractions.\nNo blocks yet.",
+            text = "DEEP FILTERING ENGAGED",
+            style = MaterialTheme.typography.labelMedium,
+            color = Color(0xFF00E676), // System Live Green
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 2.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Monitoring $appCount apps for distractions.\nYou are in the flow.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color.Gray,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            lineHeight = 22.sp
         )
     }
 }

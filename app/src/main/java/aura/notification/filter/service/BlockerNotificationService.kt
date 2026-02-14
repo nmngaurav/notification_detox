@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class AuraNotificationService : NotificationListenerService() {
+class BlockerNotificationService : NotificationListenerService() {
 
     @Inject lateinit var repository: NotificationRepository
 
@@ -60,7 +60,11 @@ class AuraNotificationService : NotificationListenerService() {
             }
 
             // 1. Configured Apps Only Logic
-            val ruleEntity = repository.getRuleForPackage(packageName) ?: return@launch
+            // Regression Fix: Always use FOCUS profile for rule lookup to match static FocusModeManager
+            val ruleEntity = repository.getRule(packageName, "FOCUS") ?: run {
+                Log.d("AuraService", "Bypassing: No rule found for $packageName in FOCUS profile")
+                return@launch
+            }
 
             val customRules = ruleEntity.customKeywords.lowercase()
             
@@ -83,16 +87,17 @@ class AuraNotificationService : NotificationListenerService() {
                 return@launch
             }
             
-            // ... (AI Rescue same as before)
+            // TIER 3: AI Rescue
             val aiVerdict = classifier.classify(title, content, packageName)
+            val activeTags = ruleEntity.activeCategories.split(",").map { it.trim() }.toSet()
             
-            if (aiVerdict == aura.notification.filter.ai.HeuristicEngine.CAT_CRITICAL) {
+            if (activeTags.contains(aiVerdict) || aiVerdict == "EMERGENCY" || aiVerdict == "SECURITY" || aiVerdict == "FINANCE") {
                 triggerRescueNotification(packageName, title)
-                Log.d("AuraService", "RESCUED by AI: $title (Critical)")
+                Log.d("AuraService", "RESCUED by AI: $title ($aiVerdict)")
                 return@launch
             }
             
-            Log.d("AuraService", "Blocked by Default: $title (AI Verdict: $aiVerdict)")
+            Log.d("AuraService", "Blocking: $title | Verdict: $aiVerdict | Active Tags: $activeTags")
             
             if (!isGroupSummary) {
                 repository.logNotification(
@@ -115,7 +120,7 @@ class AuraNotificationService : NotificationListenerService() {
     // ... rescue notification helper remains ...
     private fun triggerRescueNotification(originPackage: String, originTitle: String) {
         // Implementation kept as is
-        val channelId = "aura_rescue"
+        val channelId = "blocker_rescue"
         val manager = getSystemService(android.app.NotificationManager::class.java)
         // ... (rest of logic same as before, just ensuring we don't delete it unintentionally)
         if (manager.getNotificationChannel(channelId) == null) {
@@ -133,7 +138,7 @@ class AuraNotificationService : NotificationListenerService() {
         val notification = android.app.Notification.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_alert) 
             .setContentTitle("Rescue: $originTitle")
-            .setContentText("Aura blocked this, but AI safely rescued it.")
+            .setContentText("Aura filtered this, but AI safely rescued it.")
             .setAutoCancel(true)
             .build()
             

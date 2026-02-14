@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -38,6 +39,7 @@ fun DigestScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF000000))
+            .statusBarsPadding()
             .padding(16.dp)
     ) {
         // Header
@@ -78,26 +80,40 @@ fun DigestScreen(
         }
         
         if (items.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 64.dp), // Compensate for visual gravity
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
                 Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = Color(0xFFDAA520) // Gold
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        // Subtle Glow
+                        Box(
+                            Modifier
+                                .size(100.dp)
+                                .background(Color(0xFFDAA520).copy(alpha = 0.1f), CircleShape)
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = Color(0xFFDAA520) // Gold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(32.dp))
                     Text(
                         "Focus Complete",
                         style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Black,
                         color = Color.White
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         "You have no pending distractions.\nEnjoy the silence.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.Gray,
+                        lineHeight = 20.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }

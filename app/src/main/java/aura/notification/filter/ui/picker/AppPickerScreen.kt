@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
@@ -29,13 +30,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import aura.notification.filter.ui.components.LiquidCard
 import aura.notification.filter.util.AppInfoManager
+import aura.notification.filter.util.pulseClickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppPickerScreen(
     navController: NavController,
     viewModel: AppPickerViewModel = hiltViewModel(),
-    initialSelectionMode: Boolean = false
+    initialSelectionMode: Boolean = false,
+    isOnboarding: Boolean = false
 ) {
     LaunchedEffect(initialSelectionMode) {
         if (initialSelectionMode) viewModel.enterSelectionMode()
@@ -59,8 +62,6 @@ fun AppPickerScreen(
     // Bug Fix: Check against Total Unique (Active + Selected)
     val isLimitReached = !isPro && totalUniqueApps >= limit
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-
     val isLoading by viewModel.isLoading.collectAsState()
 
     if (isLoading) {
@@ -68,29 +69,49 @@ fun AppPickerScreen(
             modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)),
             contentAlignment = Alignment.Center
         ) {
-            aura.notification.filter.ui.components.PulsingAuraLoader(color = Color(0xFFDAA520))
-            Spacer(modifier = Modifier.height(100.dp))
-            Text("Scanning Apps...", color = Color.Gray, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 80.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                aura.notification.filter.ui.components.PulsingAuraLoader(color = Color(0xFFDAA520))
+                Spacer(modifier = Modifier.height(48.dp))
+                Text(
+                    "Scanning Apps...", 
+                    color = Color.White.copy(alpha = 0.6f), 
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
         return
     }
 
     Scaffold(
         containerColor = Color(0xFF0A0A0A),
+        modifier = Modifier.statusBarsPadding(),
         floatingActionButton = {
             if (isSelectionMode && selectedPackages.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { 
                         val pkgString = selectedPackages.joinToString(",")
-                        navController.navigate("batch_config/${android.net.Uri.encode(pkgString)}") 
+                        navController.navigate("batch_config/${android.net.Uri.encode(pkgString)}?isOnboarding=$isOnboarding") 
                     },
                     containerColor = Color(0xFFDAA520),
-                    contentColor = Color.Black
+                    contentColor = Color.Black,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.pulseClickable {
+                        val pkgString = selectedPackages.joinToString(",")
+                        navController.navigate("batch_config/${android.net.Uri.encode(pkgString)}?isOnboarding=$isOnboarding")
+                    }
                 ) {
-                    Row(Modifier.padding(horizontal = 16.dp)) {
-                        Text("Configure (${selectedPackages.size})", fontWeight = FontWeight.Bold)
+                    Row(
+                        Modifier.padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Configure (${selectedPackages.size})", 
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 0.5.sp
+                        )
                         Spacer(Modifier.width(8.dp))
-                        Icon(Icons.Default.KeyboardArrowRight, null)
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
                     }
                 }
             }
@@ -117,7 +138,7 @@ fun AppPickerScreen(
                         onDone = { 
                             if (selectedPackages.isNotEmpty()) {
                                 val pkgString = selectedPackages.joinToString(",")
-                                navController.navigate("batch_config/${android.net.Uri.encode(pkgString)}") 
+                                navController.navigate("batch_config/${android.net.Uri.encode(pkgString)}?isOnboarding=$isOnboarding") 
                             }
                         }
                     )
@@ -147,7 +168,7 @@ fun AppPickerScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(Color(0xFF1E1E1E))
-                                .clickable { viewModel.enterSelectionMode() }
+                                .pulseClickable { viewModel.enterSelectionMode() }
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Text("Batch Mode", color = Color(0xFFDAA520), fontWeight = FontWeight.Bold)
@@ -159,13 +180,15 @@ fun AppPickerScreen(
                 TextField(
                     value = searchQuery,
                     onValueChange = viewModel::onSearchQueryChanged,
-                    placeholder = { Text("Search apps...", color = Color(0xFFCCCCCC)) },
+                    placeholder = { Text("Search apps...", color = Color.White.copy(alpha = 0.6f)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFFCCCCCC)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                         .clip(RoundedCornerShape(12.dp)),
                     colors = TextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
                         focusedContainerColor = Color(0xFF1E1E1E),
                         unfocusedContainerColor = Color(0xFF1E1E1E),
                         focusedIndicatorColor = Color.Transparent,

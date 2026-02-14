@@ -24,7 +24,11 @@ import android.net.Uri
 import aura.notification.filter.ui.components.PulsingAuraLoader
 
 @Composable
-fun AppNavigation(startDestination: String = "onboarding") {
+fun AppNavigation(
+    startDestination: String = "onboarding",
+    billingManager: aura.notification.filter.billing.BillingManager,
+    analyticsManager: aura.notification.filter.util.AnalyticsManager
+) {
     val navController = rememberNavController()
 
     NavHost(
@@ -43,14 +47,13 @@ fun AppNavigation(startDestination: String = "onboarding") {
             slideOutHorizontally(targetOffsetX = { it }) + fadeOut() 
         }
     ) {
-        composable("onboarding") {
+        composable("onboarding?startStep={startStep}") { backStackEntry ->
+            val startStep = backStackEntry.arguments?.getString("startStep")
             OnboardingScreen(
                 navController = navController,
+                startStep = startStep,
                 onFinish = {
-                    // Fallback finish if needed
-                    navController.navigate("dashboard") {
-                        popUpTo("onboarding") { inclusive = true }
-                    }
+                    navController.navigate("paywall?isOnboarding=true")
                 }
             )
         }
@@ -98,25 +101,42 @@ fun AppNavigation(startDestination: String = "onboarding") {
             aura.notification.filter.ui.picker.AppPickerScreen(
                 navController = navController, 
                 viewModel = hiltViewModel(), 
-                initialSelectionMode = true
+                initialSelectionMode = true,
+                isOnboarding = true
             )
         }
-        composable("batch_config/{packageNames}") { backStackEntry ->
+        composable("batch_config/{packageNames}?isOnboarding={isOnboarding}") { backStackEntry ->
             val packageNames = backStackEntry.arguments?.getString("packageNames") ?: ""
+            val isOnboarding = backStackEntry.arguments?.getString("isOnboarding")?.toBoolean() ?: false
             aura.notification.filter.ui.settings.BatchConfigScreen(
                 navController = navController,
                 packageNames = packageNames,
-                mainViewModel = hiltViewModel()
+                mainViewModel = hiltViewModel(),
+                isOnboarding = isOnboarding
             )
         }
+        
+
         composable("celebration") {
             aura.notification.filter.ui.onboarding.CelebrationScreen(navController)
         }
 
-        composable("paywall") {
+        composable("paywall?isOnboarding={isOnboarding}") { backStackEntry ->
+             val isOnboarding = backStackEntry.arguments?.getString("isOnboarding")?.toBoolean() ?: false
              aura.notification.filter.ui.paywall.PaywallScreen(
-                 onPurchaseClick = { /* TODO: Trigger Billing */ },
-                 onClose = { navController.popBackStack() }
+                 billingManager = billingManager,
+                 analyticsManager = analyticsManager,
+                 isOnboarding = isOnboarding,
+                 onClose = { 
+                     if (isOnboarding) {
+                         // Navigation Recovery: Go to app picker after paywall
+                         navController.navigate("onboarding/app_picker") {
+                             popUpTo("onboarding") { inclusive = true }
+                         }
+                     } else {
+                         navController.popBackStack() 
+                     }
+                 }
              )
         }
         composable("app_config/{packageName}") { backStackEntry ->
@@ -137,22 +157,28 @@ fun AppNavigation(startDestination: String = "onboarding") {
                 // Add artificial delay for smooth transition if needed, or just fetch
                 rule = viewModel.getRule(packageName)
                 isLoading = false
+                
+                val bundle = android.os.Bundle().apply {
+                    putString(aura.notification.filter.util.AnalyticsConstants.PARAM_PACKAGE_NAME, packageName)
+                }
+                analyticsManager.logEvent(aura.notification.filter.util.AnalyticsConstants.EVENT_APP_CONTROL_OPENED, bundle)
             }
             
             // Fix: Use generic clean loader instead of CircularProgressIndicator (Crash prevent)
             if (isLoading) {
                  Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)), // Darker background for focus 
+                    modifier = Modifier.fillMaxSize().background(Color.Black), 
                     contentAlignment = Alignment.Center
                  ) {
                      PulsingAuraLoader(color = Color(0xFFDAA520))
                  }
             } else {
-                aura.notification.filter.ui.settings.AppConfigSheet(
+                aura.notification.filter.ui.settings.AppConfigScreen(
                     appName = appInfo.label, 
                     packageName = packageName,
                     icon = appInfo.icon,
                     isPro = isPro,
+                    analyticsManager = analyticsManager,
                     // Use rule if exists, otherwise defaults
                     currentShieldLevel = rule?.shieldLevel ?: aura.notification.filter.data.ShieldLevel.SMART,
                     initialCategories = rule?.activeCategories ?: "",
@@ -177,7 +203,8 @@ fun AppNavigation(startDestination: String = "onboarding") {
                         viewModel.removeRule(packageName)
                         navController.popBackStack()
                     },
-                    onDismiss = { navController.popBackStack() }
+                    onDismiss = { navController.popBackStack() },
+                    onProClick = { navController.navigate("paywall") }
                 )
             }
         }

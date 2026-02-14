@@ -13,11 +13,13 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Lock
+import aura.notification.filter.util.shimmer
+import androidx.compose.ui.res.painterResource
+import aura.notification.filter.R
+import androidx.compose.foundation.Image
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,10 +45,10 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 // -----------------------------------------------------------------------------
-// 1. AURORA BACKGROUND (Mesh Gradient)
+// 1. AURA BACKGROUND (Mesh Gradient)
 // -----------------------------------------------------------------------------
 @Composable
-fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+fun AuraBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "Aurora")
     
     // Animate color positions
@@ -111,7 +113,7 @@ fun Modifier.borderBeam(
     width: Dp = 1.dp,
     color: Color = Color(0xFFDAA520),
     durationMillis: Int = 3000,
-    shape: Shape = RoundedCornerShape(12.dp)
+    shape: Shape = RoundedCornerShape(16.dp)
 ): Modifier = composed {
     val infiniteTransition = rememberInfiniteTransition(label = "Beam")
     val angle by infiniteTransition.animateFloat(
@@ -199,30 +201,15 @@ fun ParallaxShieldHero(count: Int) {
                 .border(1.dp, Color(0xFFDAA520).copy(alpha = 0.3f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            // Layer 2: Icon (Movies more)
-            Icon(
-                imageVector = androidx.compose.material.icons.Icons.Default.Lock, // Placeholder for shield
+            // Layer 2: Icon (Moves more)
+            Image(
+                painter = painterResource(id = R.drawable.ic_premium_crown),
                 contentDescription = null,
-                tint = Color(0xFFDAA520),
                 modifier = Modifier
                     .size(40.dp)
                     .offset { IntOffset(offX.toInt(), offY.toInt()) }
-            )
-        }
-        
-        // Count Badge (Floating on top)
-        Box(
-            modifier = Modifier
-                .offset { IntOffset((offX * 1.5f).toInt(), (offY * 1.5f).toInt() + 140) }
-                .background(Color(0xFF1E1E1E), RoundedCornerShape(16.dp))
-                .border(1.dp, Color(0xFF333333), RoundedCornerShape(16.dp))
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-            Text(
-                text = "Protecting $count Apps",
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+                    .shimmer(), // Premium Glow
+                colorFilter = ColorFilter.tint(Color(0xFFDAA520))
             )
         }
     }

@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Aura</string>
+    <string name="app_name">Aura: Notification Blocker</string>
     <string name="service_name">Aura Notification Service</string>
 </resources>

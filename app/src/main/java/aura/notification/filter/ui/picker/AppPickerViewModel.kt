@@ -22,7 +22,8 @@ class AppPickerViewModel @Inject constructor(
     private val appInfoManager: AppInfoManager,
     private val heuristicEngine: HeuristicEngine,
     private val repository: aura.notification.filter.data.NotificationRepository,
-    billingManager: aura.notification.filter.billing.BillingManager
+    billingManager: aura.notification.filter.billing.BillingManager,
+    private val analyticsManager: aura.notification.filter.util.AnalyticsManager
 ) : ViewModel() {
 
     // Helper to determine if a package belongs to any known category
@@ -120,6 +121,11 @@ class AppPickerViewModel @Inject constructor(
             }
             _allApps.value = apps
             _isLoading.value = false
+            
+            val bundle = android.os.Bundle().apply {
+                putInt(aura.notification.filter.util.AnalyticsConstants.PARAM_SCAN_COUNT, apps.size)
+            }
+            analyticsManager.logEvent(aura.notification.filter.util.AnalyticsConstants.EVENT_APP_SCAN_COMPLETE, bundle)
         }
     }
 

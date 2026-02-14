@@ -16,7 +16,8 @@ class OnboardingViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsDataStore: aura.notification.filter.data.SettingsDataStore,
     val appInfoManager: aura.notification.filter.util.AppInfoManager,
-    private val repository: aura.notification.filter.data.NotificationRepository
+    private val repository: aura.notification.filter.data.NotificationRepository,
+    private val analyticsManager: aura.notification.filter.util.AnalyticsManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OnboardingUiState())
@@ -25,7 +26,12 @@ class OnboardingViewModel @Inject constructor(
     fun completeOnboarding() {
         viewModelScope.launch {
             settingsDataStore.setOnboardingCompleted(true)
+            analyticsManager.logOnboardingComplete()
         }
+    }
+
+    fun startOnboarding() {
+        analyticsManager.logOnboardingStart()
     }
 }
 

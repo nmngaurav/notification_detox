@@ -5,13 +5,22 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import aura.notification.filter.R
 import androidx.navigation.NavController
 import aura.notification.filter.ui.components.ParticleSystem
 import kotlinx.coroutines.delay
@@ -47,17 +56,27 @@ fun CelebrationScreen(
         // Simple Particle Explosion
         ConfettiExplosion()
         
-        // Text
+        // Content
         androidx.compose.animation.AnimatedVisibility(
             visible = isVisible,
-            enter = androidx.compose.animation.fadeIn(tween(500)) + androidx.compose.animation.scaleIn(tween(500))
+            enter = androidx.compose.animation.fadeIn(tween(800)) + androidx.compose.animation.scaleIn(tween(800))
         ) {
-            Text(
-                "You're all set!",
-                color = Color(0xFFDAA520),
-                fontWeight = FontWeight.Black,
-                fontSize = 32.sp
-            )
+            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_premium_crown),
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp),
+                    colorFilter = ColorFilter.tint(Color(0xFFDAA520))
+                )
+                androidx.compose.foundation.layout.Spacer(Modifier.height(32.dp))
+                Text(
+                    "You're all set!",
+                    color = Color(0xFFDAA520),
+                    fontWeight = FontWeight.Black,
+                    fontSize = 32.sp,
+                    letterSpacing = 1.sp
+                )
+            }
         }
     }
 }

@@ -18,17 +18,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.res.painterResource
+import aura.notification.filter.R
+import androidx.compose.foundation.Image
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import aura.notification.filter.data.ShieldLevel
 import aura.notification.filter.ui.components.GlassCard
 import aura.notification.filter.ui.components.ShieldSlider
+import aura.notification.filter.util.pulseClickable
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -60,33 +65,39 @@ fun ShieldControlScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { navController.navigate("app_selection/$selectedProfile") },
-                containerColor = Color(0xFFDAA520)
+                containerColor = Color(0xFFDAA520),
+                modifier = Modifier.pulseClickable { navController.navigate("app_selection/$selectedProfile") }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add to Detox", tint = Color.Black)
             }
         },
         containerColor = Color(0xFF0A0A0A)
     ) { padding ->
-        // Modal Sheet for Config
-        if (selectedRule != null) {
-            val appInfo = viewModel.getAppInfo(selectedRule!!.packageName)
-            AppConfigSheet(
+        // Screen-based Config (Full Screen as requested)
+        selectedRule?.let { rule ->
+            val appInfo = viewModel.getAppInfo(rule.packageName)
+            AppConfigScreen(
                 appName = appInfo.label,
-                packageName = selectedRule!!.packageName,
+                packageName = rule.packageName,
                 icon = appInfo.icon,
                 isPro = isPro,
-                currentShieldLevel = selectedRule!!.shieldLevel,
-                initialCategories = selectedRule!!.activeCategories,
-                keywords = selectedRule!!.customKeywords,
+                analyticsManager = viewModel.analyticsManager,
+                currentShieldLevel = rule.shieldLevel,
+                initialCategories = rule.activeCategories,
+                keywords = rule.customKeywords,
                 onSave = { level, categories, keywords ->
-                    viewModel.updateSmartRule(selectedRule!!.packageName, selectedProfile, categories, keywords)
+                    viewModel.updateSmartRule(rule.packageName, selectedProfile, categories, keywords)
                     selectedRule = null
                 },
                 onRemove = {
-                    viewModel.deleteRule(selectedRule!!.packageName, selectedProfile)
+                    viewModel.deleteRule(rule.packageName, selectedProfile)
                     selectedRule = null
                 },
-                onDismiss = { selectedRule = null }
+                onDismiss = { selectedRule = null },
+                onProClick = { 
+                    selectedRule = null
+                    navController.navigate("paywall") 
+                }
             )
         }
 
@@ -228,11 +239,13 @@ fun EmptyState(navController: NavController, profileId: String) {
                 .border(2.dp, Color(0xFFDAA520).copy(alpha = 0.1f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Star,
+            Image(
+                painter = painterResource(id = R.drawable.ic_premium_crown),
                 contentDescription = null,
-                tint = Color(0xFFDAA520).copy(alpha = 0.4f),
-                modifier = Modifier.size(64.dp)
+                modifier = Modifier
+                    .size(64.dp)
+                    .alpha(0.4f),
+                colorFilter = ColorFilter.tint(Color(0xFFDAA520))
             )
         }
         
@@ -261,7 +274,7 @@ fun EmptyState(navController: NavController, profileId: String) {
             onClick = { navController.navigate("app_selection/$profileId") },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDAA520), contentColor = Color.Black),
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.height(56.dp).fillMaxWidth()
+            modifier = Modifier.height(56.dp).fillMaxWidth().pulseClickable { navController.navigate("app_selection/$profileId") }
         ) {
             Icon(Icons.Default.Add, null)
             Spacer(modifier = Modifier.width(8.dp))

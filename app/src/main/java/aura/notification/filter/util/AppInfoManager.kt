@@ -15,7 +15,7 @@ class AppInfoManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val packageManager: PackageManager = context.packageManager
-    private val cache = mutableMapOf<String, AppInfo>()
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, AppInfo>()
 
     data class AppInfo(
         val label: String,
@@ -24,9 +24,7 @@ class AppInfoManager @Inject constructor(
     )
 
     fun getAppInfo(packageName: String): AppInfo {
-        if (cache.containsKey(packageName)) {
-            return cache[packageName]!!
-        }
+        cache[packageName]?.let { return it }
 
         val info = try {
             val appInfo = packageManager.getApplicationInfo(packageName, 0)

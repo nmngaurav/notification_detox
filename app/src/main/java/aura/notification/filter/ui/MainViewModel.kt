@@ -31,7 +31,8 @@ class MainViewModel @Inject constructor(
     private val appInfoManager: AppInfoManager,
     private val focusModeManager: aura.notification.filter.data.FocusModeManager,
     private val classifier: aura.notification.filter.ai.ClassificationHelper,
-    private val profileSeeder: aura.notification.filter.util.ProfileSeeder
+    private val profileSeeder: aura.notification.filter.util.ProfileSeeder,
+    private val analyticsManager: aura.notification.filter.util.AnalyticsManager
 ) : ViewModel() {
 
     init {
@@ -111,6 +112,21 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Dashboard Enhancement: Launch the actual app from Aura
+     */
+    fun openApp(packageName: String, context: android.content.Context) {
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private val _summaries = mutableStateMapOf<String, String>()
     val summaries: Map<String, String> get() = _summaries
 
@@ -160,15 +176,17 @@ class MainViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
         
     val focusTimeSaved = blockedNotifications.map { list ->
-        // Weighted algorithm based on category
+        // Weighted algorithm based on refined taxonomy
         list.sumOf { notification ->
-            when (notification.category.lowercase()) {
-                "social" -> 5      // Social media = 5 min average distraction
-                "promotional" -> 1 // Promo emails = 1 min
-                "update" -> 2      // App updates = 2 min
-                "urgent" -> 0      // These shouldn't be blocked, but just in case
-                else -> 2          // Default
-            }.toLong() // Explicit cast to avoid ambiguity
+            val cat = notification.category
+            when {
+                cat.contains("Promotions") || cat.contains("Updates") -> 1
+                cat.contains("Headlines") || cat.contains("Entertainment") -> 2
+                cat.contains("Shopping") || cat.contains("Transport") -> 3
+                cat.contains("Social") || cat.contains("Chats") || cat.contains("Threads") -> 5
+                cat.contains("Work") || cat.contains("Meetings") || cat.contains("Documents") -> 8
+                else -> 2
+            }.toLong()
         }.toInt()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 

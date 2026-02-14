@@ -16,15 +16,15 @@ class ClassificationHelper @Inject constructor(
         // TIER 1: Local Heuristics (<10ms) - SAFETY NET
         // We run this FIRST so that even if "Gaurav" is cached as "social", his "Emergency" message breaks through.
         if (heuristicEngine.isCritical(title, content)) {
-             Log.d("ClassificationHelper", "Heuristic Verdict: CRITICAL for $title")
-             return HeuristicEngine.CAT_CRITICAL
+             Log.d("ClassificationHelper", "Heuristic Verdict: EMERGENCY for $title")
+             return HeuristicEngine.TAG_EMERGENCY
         }
 
         // TIER 2: Decision Cache (<5ms)
         // If we've seen this sender before and the heuristics didn't flag it as generic, trust the cache.
         decisionCache.getVerdict(packageName, title)?.let {
-            // Never trust a cached "critical" verdict blindly as content varies.
-            if (it == HeuristicEngine.CAT_CRITICAL) return@let 
+            // Never trust a cached emergency verdict blindly as content varies.
+            if (it == HeuristicEngine.TAG_EMERGENCY) return@let 
             
             Log.d("ClassificationHelper", "Cache Hit: $it for $title")
             return it
@@ -37,15 +37,15 @@ class ClassificationHelper @Inject constructor(
                 val category = classifyWithAI(title, content)
                 
                 // Only cache stable categories.
-                if (category != HeuristicEngine.CAT_CRITICAL) {
+                if (category != HeuristicEngine.TAG_EMERGENCY) {
                     decisionCache.cacheVerdict(packageName, title, category)
                 }
                 category
             }
         } catch (e: Exception) {
             Log.w("ClassificationHelper", "AI failed, using fallback: ${e.message}")
-            // Fallback: Default to NOISE to be safe (over-blocking is better than under-blocking in V3)
-            HeuristicEngine.CAT_NOISE
+            // Fallback: Default to Updates to be safe
+            HeuristicEngine.TAG_UPDATES
         }
     }
 
@@ -101,45 +101,77 @@ class ClassificationHelper @Inject constructor(
 
     private suspend fun classifyWithAI(title: String, content: String): String {
         val prompt = """
-            Classify this notification into ONE category: critical, productivity, social, logistics, events, gamification, or noise.
+            Classify this notification into EXACTLY ONE of these categories:
             
+            1. Safety & Finance: security, finance, emergency, logistics
+            2. Personal Inbox: direct_chats, group_threads, mentions, calls
+            3. Work & Planning: work, meetings, documents, storage
+            4. Activity & Home: smart_home, health, transport, shopping
+            5. Content & Awareness: entertainment, headlines, updates, promotions
+            
+            Rules for specific tags:
+            - "security": OTP, 2FA, login codes, password reset.
+            - "finance": Bank alerts, card transactions, bills.
+            - "emergency": SOS, hospital, safety alerts, family urgency.
+            - "logistics": Food delivery, package tracking.
+            - "direct_chats": 1-on-1 personal messages.
+            - "group_threads": Activity from group chats/channels.
+            - "mentions": @mentions, replies, tags.
+            - "calls": Voice and video call alerts.
+            - "work": Slack, Teams, Jira, work emails.
+            - "meetings": Calendar invites, Zoom, Meet.
+            - "documents": Comments/edits on docs, sheets, PDFs.
+            - "storage": Memory full, cloud backup, sync errors.
+            - "smart_home": Doorbell, cameras, IoT sensors.
+            - "health": Meditation, step goals, meds, sleep.
+            - "transport": Uber, Lyft, flight status, transit.
+            - "shopping": Receipts, order confirmations (non-delivery).
+            - "entertainment": YouTube, streams, music releases, gaming.
+            - "headlines": Breaking news, weather alerts.
+            - "updates": System/app software updates.
+            - "promotions": Sales, coupons, promo deals.
+            
+            Notification:
             Title: $title
             Content: $content
             
-            Rules:
-            - "critical": OTPs, codes, security, emergency (hospital, accident, safety), bank debit, call from family.
-            - "productivity": Work docs, teams, slack, calendar invites, system info.
-            - "logistics": Deliveries, food arrival, shipping updates, tracking info.
-            - "events": Concerts, starting news, live streams, tickets, gym reminders.
-            - "social": Direct messages, personal chats, @mentions.
-            - "gamification": Streaks, daily rewards, game invites, points, levels.
-            - "noise": Sales, marketing, group chat reactions, likes, generic feed updates.
-            
-            IMPORTANT: If the message implies ANY physical or financial danger, safety emergency, or immediate family urgency, ALWAYS use "critical".
-            
-            Response format: Just the category name in lowercase.
+            Response format: Just the tag name (e.g. "security" or "group_threads").
         """.trimIndent()
 
         val request = OpenAIRequest(
             messages = listOf(
-                Message(role = "system", content = "You are a notification classification assistant. Respond with only one word."),
+                Message(role = "system", content = "You are a notification classification assistant. Respond with only the specific tag from the provided list."),
                 Message(role = "user", content = prompt)
             ),
             max_tokens = 10
         )
 
         val response = openAIService.chatCompletion(request)
-        val category = response.choices.firstOrNull()?.message?.content?.trim()?.lowercase() ?: HeuristicEngine.CAT_NOISE
+        val aiTag = response.choices.firstOrNull()?.message?.content?.trim()?.lowercase() ?: HeuristicEngine.TAG_PROMOS
         
-        return when (category) {
-            HeuristicEngine.CAT_CRITICAL, 
-            HeuristicEngine.CAT_PRODUCTIVITY, 
-            HeuristicEngine.CAT_SOCIAL, 
-            HeuristicEngine.CAT_LOGISTICS, 
-            HeuristicEngine.CAT_EVENTS, 
-            HeuristicEngine.CAT_GAMIFICATION, 
-            HeuristicEngine.CAT_NOISE -> category
-            else -> HeuristicEngine.CAT_PRODUCTIVITY // Safe default
+        // Map the AI slug back to the display constants used in HeuristicEngine
+        return when (aiTag) {
+            "security" -> HeuristicEngine.TAG_SECURITY
+            "finance" -> HeuristicEngine.TAG_MONEY
+            "emergency" -> HeuristicEngine.TAG_EMERGENCY
+            "logistics" -> HeuristicEngine.TAG_LOGISTICS
+            "direct_chats" -> HeuristicEngine.TAG_MESSAGES
+            "group_threads" -> HeuristicEngine.TAG_GROUPS
+            "mentions" -> HeuristicEngine.TAG_MENTIONS
+            "calls" -> HeuristicEngine.TAG_CALLS
+            "work" -> HeuristicEngine.TAG_WORK
+            "meetings" -> HeuristicEngine.TAG_SCHEDULE
+            "documents" -> HeuristicEngine.TAG_DOCS
+            "storage" -> HeuristicEngine.TAG_STORAGE
+            "smart_home" -> HeuristicEngine.TAG_IOT
+            "health" -> HeuristicEngine.TAG_FITNESS
+            "transport" -> HeuristicEngine.TAG_TRAVEL
+            "shopping" -> HeuristicEngine.TAG_ORDERS
+            "entertainment" -> HeuristicEngine.TAG_ENTERTAINMENT
+            "headlines" -> HeuristicEngine.TAG_NEWS
+            "updates" -> HeuristicEngine.TAG_UPDATES
+            "promotions" -> HeuristicEngine.TAG_PROMOS
+            else -> HeuristicEngine.TAG_PROMOS
         }
     }
 }

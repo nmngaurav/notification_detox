@@ -36,25 +36,24 @@ fun GlassCard(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
             .background(
-                color = backgroundColor ?: Color.Transparent
+                color = backgroundColor ?: Color.White.copy(alpha = 0.03f)
             )
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.15f),
-                        Color.White.copy(alpha = 0.05f)
+                        Color.White.copy(alpha = 0.12f),
+                        Color.White.copy(alpha = 0.02f)
                     )
                 )
             )
-            .then(clickModifier) // Add clickable AFTER clip/background logic if needed, actually standard is clip -> clickable -> background? No, clip -> background -> clickable for ripple on top? 
-            // Wait, standard: clip -> background -> clickable.
-            // So let's just append clickModifier here.
+            .then(clickModifier)
             .border(
-                width = 1.dp,
+                width = 0.5.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.3f),
-                        Color.Transparent
+                        Color.White.copy(alpha = 0.25f),
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.1f)
                     )
                 ),
                 shape = RoundedCornerShape(cornerRadius)

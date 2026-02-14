@@ -59,21 +59,22 @@ fun AppSelectionScreen(
     var selectedPackages by remember { mutableStateOf(setOf<String>()) }
     var showBulkConfigSheet by remember { mutableStateOf(false) }
     
-    // Premium gate for bulk actions (set to true to lock behind premium in future)
-    val isBulkActionPremiumLocked = false // Change to !isPro when ready to monetize
+    // Premium gate for bulk actions
+    val isBulkActionPremiumLocked = !isPro
     
     val accentColor = Color(0xFFDAA520)
 
-    // Custom Rule Config Sheet
+    // Custom Rule Config Screen
     if (selectedForConfig != null) {
         val app = selectedForConfig!!
         
         // Use default SMART level for new apps
-        aura.notification.filter.ui.settings.AppConfigSheet(
+        aura.notification.filter.ui.settings.AppConfigScreen(
             appName = app.label,
             packageName = app.packageName,
             icon = app.icon,
             isPro = isPro,
+            analyticsManager = viewModel.analyticsManager,
             currentShieldLevel = ShieldLevel.SMART,
             initialCategories = "",
             keywords = "", 
@@ -86,7 +87,11 @@ fun AppSelectionScreen(
                 viewModel.deleteRule(app.packageName, profileId)
                 selectedForConfig = null
             },
-            onDismiss = { selectedForConfig = null }
+            onDismiss = { selectedForConfig = null },
+            onProClick = {
+                selectedForConfig = null
+                navController.navigate("paywall")
+            }
         )
     }
     
@@ -118,6 +123,7 @@ fun AppSelectionScreen(
 
     Scaffold(
         containerColor = Color(0xFF0A0A0A),
+        modifier = Modifier.statusBarsPadding(),
         topBar = {
             Column(modifier = Modifier.background(Color(0xFF0A0A0A))) {
                 // Header

@@ -15,111 +15,120 @@ class HeuristicEngine @Inject constructor() {
         "Entertainment" to setOf("com.google.android.youtube", "com.netflix.mediaclient", "com.spotify.music", "tv.twitch.android")
     )
 
-    // --- SMART TAG CONSTANTS (Premium V2) ---
+    // --- SMART TAG CONSTANTS (Refined V4) ---
     companion object {
-        // Essentials
-        const val TAG_SECURITY = "OTPs & Codes"
-        const val TAG_MONEY = "Money"
-        const val TAG_UPDATES = "Updates"
+        // Category: Safety & Finance
+        const val TAG_SECURITY = "Security"
+        const val TAG_MONEY = "Finance"
+        const val TAG_EMERGENCY = "Emergency"
+        const val TAG_LOGISTICS = "Logistics"
         
-        // Social
-        const val TAG_MESSAGES = "Messages"
+        // Category: Personal Inbox
+        const val TAG_MESSAGES = "Direct Chats"
+        const val TAG_GROUPS = "Group Threads"
         const val TAG_MENTIONS = "Mentions"
         const val TAG_CALLS = "Calls"
         
-        // Lifestyle
-        const val TAG_ORDERS = "Orders"
-        const val TAG_SCHEDULE = "Schedule"
-        const val TAG_PROMOS = "Promos"
-        const val TAG_NEWS = "News"
+        // Category: Work & Planning
+        const val TAG_WORK = "Work"
+        const val TAG_SCHEDULE = "Meetings"
+        const val TAG_DOCS = "Documents"
+        const val TAG_STORAGE = "Storage"
 
-        // --- LEGACY CONSTANTS (Required by ClassificationHelper) ---
-        const val CAT_CRITICAL = "critical"
-        const val CAT_PRODUCTIVITY = "productivity"
-        const val CAT_SOCIAL = "social"
-        const val CAT_LOGISTICS = "logistics"
-        const val CAT_EVENTS = "events"
-        const val CAT_GAMIFICATION = "gamification"
-        const val CAT_NOISE = "noise"
+        // Category: Activity & Home
+        const val TAG_IOT = "Smart Home"
+        const val TAG_FITNESS = "Health"
+        const val TAG_TRAVEL = "Transport"
+        const val TAG_ORDERS = "Shopping"
+
+        // Category: Content & Awareness
+        const val TAG_ENTERTAINMENT = "Entertainment"
+        const val TAG_NEWS = "Headlines"
+        const val TAG_UPDATES = "Updates"
+        const val TAG_PROMOS = "Promotions"
+
     }
 
     /**
      * Safety Net: Checks if content is CRITICAL/SECURITY regardless of user tags.
-     * Used by ClassificationHelper as Tier 1 fallback.
      */
     fun isCritical(title: String, content: String): Boolean {
         val combined = "$title $content".lowercase()
         val criticalPatterns = listOf(
-            "(?i).*otp.*", "(?i).*verification.*", "(?i).*auth.*", "(?i).*password.*",
-            "(?i).*hospital.*", "(?i).*urgent.*", "(?i).*emergency.*", "(?i).*accident.*",
-            "(?i).*ambulance.*", "(?i).*police.*", "(?i).*fire.*", "(?i).*sos.*",
-            "(?i).*immediate.*", "(?i).*attention.*", "(?i).*bank.*debit.*", "(?i).*card.*lost.*"
-        ).map { it.toRegex() }
+            "otp", "verification", "auth", "password",
+            "hospital", "urgent", "emergency", "accident",
+            "ambulance", "police", "fire", "sos",
+            "immediate", "attention", "bank.*debit", "card.*lost"
+        ).map { it.toRegex(RegexOption.IGNORE_CASE) }
         
         return criticalPatterns.any { it.containsMatchIn(combined) }
     }
 
-    // --- REGEX PATTERNS (Mapped to Tags) ---
+    // --- REGEX PATTERNS (Refined V4) ---
     
-    // Tag: Security (OTPs, 2FA)
-    private val securityPatterns = listOf(
-        "(?i).*otp.*", "(?i).*code.*", "(?i).*verification.*", "(?i).*password.*",
-        "(?i).*login.*", "(?i).*auth.*", "(?i).*2fa.*", "(?i).*access.*"
-    ).map { it.toRegex() }
+    // Tag: Security
+    private val securityPatterns = listOf("otp", "code", "verification", "password", "login", "auth", "2fa", "access").map { "(?i).*$it.*".toRegex() }
 
-    // Tag: Transactions (Money)
-    private val transactionPatterns = listOf(
-        "(?i).*bank.*", "(?i).*acct.*", "(?i).*debited.*", "(?i).*credited.*", 
-        "(?i).*payment.*", "(?i).*card.*", "(?i).*spent.*", "(?i).*balance.*", 
-        "(?i).*salary.*", "(?i).*bill.*", "(?i).*due.*", "(?i).*paid.*", "(?i).*txn.*",
-        "(?i).*transaction.*"
-    ).map { it.toRegex() }
+    // Tag: Finance
+    private val financePatterns = listOf("bank", "acct", "debited", "credited", "payment", "card", "spent", "balance", "salary", "bill", "due", "paid", "txn", "transaction").map { "(?i).*$it.*".toRegex() }
 
-    // Tag: Mentions (Social)
-    private val mentionPatterns = listOf(
-        "(?i).*@.*", "(?i).*replied.*", "(?i).*reply.*", "(?i).*sent you.*", 
-        "(?i).*tagged.*", "(?i).*commented.*", "(?i).*mentioned.*"
-    ).map { it.toRegex() }
+    // Tag: Emergency
+    private val emergencyPatterns = listOf("emergency", "sos", "hospital", "police", "fire", "accident", "ambulance", "safety", "urgent").map { "(?i).*$it.*".toRegex() }
 
-    // Tag: Direct Msgs (Chat) - *Requires Context (not Group)*
-    private val dmPatterns = listOf(
-        "(?i).*message.*", "(?i).*chat.*", "(?i).*photo.*", "(?i).*video.*", 
-        "(?i).*sticker.*", "(?i).*audio.*", "(?i).*attachment.*"
-    ).map { it.toRegex() }
+    // Tag: Logistics (Deliveries)
+    private val logisticsPatterns = listOf("delivery", "arriving", "picked up", "out for", "package", "track", "driver", "order", "shipment", "arrived", "delivered", "food", "zomato", "swiggy", "ubereats", "door dash").map { "(?i).*$it.*".toRegex() }
 
-    // Tag: Deliveries
-    private val deliveryPatterns = listOf(
-        "(?i).*delivery.*", "(?i).*arriving.*", "(?i).*picked up.*", "(?i).*out for.*",
-        "(?i).*package.*", "(?i).*track.*", "(?i).*driver.*", "(?i).*order.*", 
-        "(?i).*shipment.*", "(?i).*arrived.*", "(?i).*delivered.*"
-    ).map { it.toRegex() }
+    // Tag: Direct Chats (1-on-1)
+    private val dmPatterns = listOf("message", "photo", "video", "sticker", "audio", "attachment", "sent you").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Group Threads
+    private val groupPatterns = listOf("group", "thread", "everyone", "added you", "channel").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Mentions
+    private val mentionPatterns = listOf("@", "replied", "commented", "mentioned", "liked", "followed", "reply").map { "(?i).*$it.*".toRegex() }
 
     // Tag: Calls
-    private val callPatterns = listOf(
-        "(?i).*call.*", "(?i).*voice.*", "(?i).*video.*", "(?i).*missed.*", 
-        "(?i).*incoming.*", "(?i).*dialing.*", "(?i).*ringing.*"
-    ).map { it.toRegex() }
+    private val callPatterns = listOf("call", "voice", "video", "missed", "incoming", "dialing", "ringing").map { "(?i).*$it.*".toRegex() }
 
-    // Tag: Events
-    private val eventPatterns = listOf(
-        "(?i).*remind.*", "(?i).*meeting.*", "(?i).*schedule.*", "(?i).*event.*", 
-        "(?i).*start.*", "(?i).*tomorrow.*", "(?i).*calendar.*", "(?i).*today.*",
-        "(?i).*zoom.*", "(?i).*teams.*"
-    ).map { it.toRegex() }
+    // Tag: Work
+    private val workPatterns = listOf("slack", "teams", "jira", "assigned", "collab", "mention", "workspace", "meeting", "approver", "ticket").map { "(?i).*$it.*".toRegex() }
 
-    // Tag: Offers
-    private val offerPatterns = listOf(
-        "(?i).*offer.*", "(?i).*sale.*", "(?i).*discount.*", "(?i).*promo.*", 
-        "(?i).*deal.*", "(?i).*free.*", "(?i).*off.*", "(?i).*coupon.*",
-        "(?i).*cashback.*", "(?i).*reward.*", "(?i).*win.*", "(?i).*gift.*"
-    ).map { it.toRegex() }
+    // Tag: Meetings
+    private val meetingPatterns = listOf("remind", "meeting", "schedule", "event", "start", "tomorrow", "calendar", "today", "zoom", "meet", "appointment").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Documents
+    private val docPatterns = listOf("document", "doc", "pdf", "sheet", "xlsx", "csv", "share", "comment", "editor", "shared with you").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Storage
+    private val storagePatterns = listOf("storage", "memory", "full", "backup", "sync", "cleaning", "disk", "cloud").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Smart Home
+    private val iotPatterns = listOf("doorbell", "motion", "camera", "light", "thermostat", "unlocked", "front door", "ring", "nest").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Health
+    private val healthPatterns = listOf("medication", "pill", "meds", "step", "goal", "workout", "meditation", "sleep", "calories", "heart rate").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Transport
+    private val transportPatterns = listOf("flight", "gate", "boarding", "uber", "lyft", "ride", "driver", "transit", "train", "ticket", "hotel").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Shopping (Non-Logistics)
+    private val shoppingPatterns = listOf("receipt", "purchase", "order confirmed", "shopping", "cart", "wishlist", "amazon", "ebay").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Entertainment
+    private val entertainmentPatterns = listOf("video", "upload", "live", "stream", "spotify", "music", "release", "gaming", "play", "match", "twitch", "youtube").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: News
+    private val newsPatterns = listOf("news", "breaking", "headlines", "alert", "report", "weather", "forecast").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Updates
+    private val updatePatterns = listOf("update", "download", "installing", "battery", "usb", "system").map { "(?i).*$it.*".toRegex() }
+
+    // Tag: Promotions
+    private val promoPatterns = listOf("offer", "sale", "discount", "promo", "deal", "free", "off", "coupon", "cashback", "reward", "win", "gift").map { "(?i).*$it.*".toRegex() }
+
 
     /**
-     * V2 Classification: Returns TRUE if the notification matches an ACTIVE Smart Tag.
-     * Returns FALSE if it should be blocked (unless rescued by AI later).
-     * 
-     * @param packageName The app origin for context-aware filtering.
-     * @param isConversation Whether the OS detected this as a MessagingStyle/Conversation notification.
+     * V4 Classification logic
      */
     fun isAllowedByTags(
         title: String, 
@@ -133,85 +142,89 @@ class HeuristicEngine @Inject constructor() {
         val combined = "$title $content"
         val activeTags = activeTagsCSV.split(",").map { it.trim() }.toSet()
         val isSocialApp = knownCategories["Social"]?.contains(packageName) == true
+        val isWorkApp = packageName.contains("teams") || packageName.contains("slack") || packageName.contains("gmail") || packageName.contains("outlook")
 
-        // 1. Essentials
-        if (activeTags.contains(TAG_SECURITY)) {
-            if (securityPatterns.any { it.containsMatchIn(combined) }) return true to TAG_SECURITY
-        }
-        if (activeTags.contains(TAG_MONEY)) {
-            if (transactionPatterns.any { it.containsMatchIn(combined) }) return true to TAG_MONEY
-        }
-        if (activeTags.contains(TAG_UPDATES)) {
-             if (Regex("(?i).*(update|download|installing|battery|usb|system).*").containsMatchIn(combined)) return true to TAG_UPDATES
-        }
+        // Helper to check if a tag is active and its patterns match
+        fun matches(tag: String, patterns: List<Regex>) = activeTags.contains(tag) && patterns.any { it.containsMatchIn(combined) }
 
-        // 2. Social (Redesigned with Context Awareness)
+        // Category 1: Safety & Finance
+        if (matches(TAG_SECURITY, securityPatterns)) return true to TAG_SECURITY
+        if (matches(TAG_MONEY, financePatterns)) return true to TAG_MONEY
+        if (matches(TAG_EMERGENCY, emergencyPatterns)) return true to TAG_EMERGENCY
+        if (matches(TAG_LOGISTICS, logisticsPatterns)) return true to TAG_LOGISTICS
+
+        // Category 2: Personal Inbox
         if (activeTags.contains(TAG_MESSAGES)) {
-             // NOISE REDUCTION: Ignore system notifications from social apps
              val isNoise = Regex("(?i).*(checking for|syncing|connected|status|backup).*").containsMatchIn(combined)
-             
              if (!isNoise) {
-                 // ALLOW if:
-                 // A) Structurally a conversation (MessagingStyle)
-                 // B) Keyword match in dmPatterns
-                 // C) From a Social App AND has reasonable chat content length (not just a system alert)
-                 if (isConversation || 
-                     dmPatterns.any { it.containsMatchIn(combined) } || 
-                     (isSocialApp && combined.length > 2 && !combined.contains("WhatsApp", ignoreCase = true))
-                 ) {
+                 if (isConversation || (!groupPatterns.any { it.containsMatchIn(combined) } && (dmPatterns.any { it.containsMatchIn(combined) } || (isSocialApp && combined.length > 2)))) {
                      return true to TAG_MESSAGES
                  }
              }
         }
-        if (activeTags.contains(TAG_MENTIONS)) {
-            if (mentionPatterns.any { it.containsMatchIn(combined) }) return true to TAG_MENTIONS
-        }
-        if (activeTags.contains(TAG_CALLS)) {
-            if (callPatterns.any { it.containsMatchIn(combined) }) return true to TAG_CALLS
-        }
+        if (matches(TAG_GROUPS, groupPatterns)) return true to TAG_GROUPS
+        if (matches(TAG_MENTIONS, mentionPatterns)) return true to TAG_MENTIONS
+        if (matches(TAG_CALLS, callPatterns)) return true to TAG_CALLS
 
-        // 3. Lifestyle
-        if (activeTags.contains(TAG_ORDERS)) {
-            if (deliveryPatterns.any { it.containsMatchIn(combined) }) return true to TAG_ORDERS
-        }
-        if (activeTags.contains(TAG_SCHEDULE)) {
-            if (eventPatterns.any { it.containsMatchIn(combined) }) return true to TAG_SCHEDULE
-        }
-        if (activeTags.contains(TAG_PROMOS)) {
-            if (offerPatterns.any { it.containsMatchIn(combined) }) return true to TAG_PROMOS
-        }
-        if (activeTags.contains(TAG_NEWS)) {
-             if (Regex("(?i).*(news|breaking|update|alert).*").containsMatchIn(combined)) return true to TAG_NEWS
-        }
+        // Category 3: Work & Planning
+        if (activeTags.contains(TAG_WORK) && (isWorkApp || workPatterns.any { it.containsMatchIn(combined) })) return true to TAG_WORK
+        if (matches(TAG_SCHEDULE, meetingPatterns)) return true to TAG_SCHEDULE
+        if (matches(TAG_DOCS, docPatterns)) return true to TAG_DOCS
+        if (matches(TAG_STORAGE, storagePatterns)) return true to TAG_STORAGE
+
+        // Category 4: Activity & Home
+        if (matches(TAG_IOT, iotPatterns)) return true to TAG_IOT
+        if (matches(TAG_FITNESS, healthPatterns)) return true to TAG_FITNESS
+        if (matches(TAG_TRAVEL, transportPatterns)) return true to TAG_TRAVEL
+        if (matches(TAG_ORDERS, shoppingPatterns)) return true to TAG_ORDERS
+
+        // Category 5: Content & Awareness
+        if (matches(TAG_ENTERTAINMENT, entertainmentPatterns)) return true to TAG_ENTERTAINMENT
+        if (matches(TAG_NEWS, newsPatterns)) return true to TAG_NEWS
+        if (matches(TAG_UPDATES, updatePatterns)) return true to TAG_UPDATES
+        if (matches(TAG_PROMOS, promoPatterns)) return true to TAG_PROMOS
 
         return false to ""
     }
     
-    /**
-     * Helper to get list of tags for UI
-     */
     fun getAllSmartTags(): List<String> = listOf(
-        TAG_SECURITY, TAG_MONEY, TAG_UPDATES,
-        TAG_MESSAGES, TAG_MENTIONS, TAG_CALLS,
-        TAG_ORDERS, TAG_SCHEDULE, TAG_PROMOS, TAG_NEWS
+        TAG_SECURITY, TAG_MONEY, TAG_EMERGENCY, TAG_LOGISTICS,
+        TAG_MESSAGES, TAG_GROUPS, TAG_MENTIONS, TAG_CALLS,
+        TAG_WORK, TAG_SCHEDULE, TAG_DOCS, TAG_STORAGE,
+        TAG_IOT, TAG_FITNESS, TAG_TRAVEL, TAG_ORDERS,
+        TAG_ENTERTAINMENT, TAG_NEWS, TAG_UPDATES, TAG_PROMOS
     )
 
     fun getCategorizedTags(): Map<String, List<TagMetadata>> = mapOf(
-        "Essentials" to listOf(
-            TagMetadata(TAG_SECURITY, "Security", "OTPs, codes & security alerts"),
-            TagMetadata(TAG_MONEY, "Finance", "Bank alerts & transactions"),
-            TagMetadata(TAG_UPDATES, "Updates", "System & app updates")
+        "Safety & Finance" to listOf(
+            TagMetadata(TAG_SECURITY, "OTPs & Security", "Banking codes & critical login alerts"),
+            TagMetadata(TAG_MONEY, "Finance & Cards", "Bank alerts & card transactions"),
+            TagMetadata(TAG_EMERGENCY, "Urgent", "SOS & health alerts"),
+            TagMetadata(TAG_LOGISTICS, "Orders & Deliveries", "Food delivery & package tracking")
         ),
-        "Social" to listOf(
-            TagMetadata(TAG_MESSAGES, "Messages", "Direct chats & threads"),
-            TagMetadata(TAG_MENTIONS, "Mentions", "@Mentions & replies"),
+        "Personal" to listOf(
+            TagMetadata(TAG_MESSAGES, "Direct Messages", "Personal 1-on-1 chats"),
+            TagMetadata(TAG_GROUPS, "Group Threads", "Group chats & channels"),
+            TagMetadata(TAG_MENTIONS, "Mentions", "Replies & @mentions"),
             TagMetadata(TAG_CALLS, "Calls", "Voice & video calls")
         ),
-        "Lifestyle" to listOf(
-            TagMetadata(TAG_ORDERS, "Logistics", "Delivery & order updates"),
-            TagMetadata(TAG_SCHEDULE, "Events", "Calendar & reminders"),
-            TagMetadata(TAG_PROMOS, "Offers", "Sales & promotions"),
-            TagMetadata(TAG_NEWS, "News", "Breaking news & global alerts")
+        "Work" to listOf(
+            TagMetadata(TAG_WORK, "Work Chat", "Professional apps & chats"),
+            TagMetadata(TAG_SCHEDULE, "Meetings", "Calendar & video events"),
+            TagMetadata(TAG_DOCS, "Documents", "Shared files & edits"),
+            TagMetadata(TAG_STORAGE, "Cloud & Storage", "Memory & backup alerts")
+        ),
+        "Home & Activity" to listOf(
+            TagMetadata(TAG_IOT, "Smart Home", "Doorbell & camera alerts"),
+            TagMetadata(TAG_FITNESS, "Health", "Fitness & medication goals"),
+            TagMetadata(TAG_TRAVEL, "Travel", "Rides, flights & hotels"),
+            TagMetadata(TAG_ORDERS, "Shopping", "Order status & receipts")
+        ),
+        "Discover" to listOf(
+            TagMetadata(TAG_ENTERTAINMENT, "Media", "Videos, music & gaming"),
+            TagMetadata(TAG_NEWS, "News", "Local & breaking headlines"),
+            TagMetadata(TAG_UPDATES, "Apps", "System & app updates"),
+            TagMetadata(TAG_PROMOS, "Deals", "Sales, offers & coupons")
         )
     )
 
