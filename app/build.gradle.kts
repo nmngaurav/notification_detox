@@ -14,8 +14,8 @@ android {
         applicationId = "aura.notification.filter"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 6
+        versionName = "1.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -83,9 +83,6 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // TensorFlow Lite
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
     // Firebase Analytics
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
