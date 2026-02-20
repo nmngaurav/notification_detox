@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "431018002699",
-    "project_id": "readfast-2e4de",
-    "storage_bucket": "readfast-2e4de.firebasestorage.app"
+    "project_number": "872426213572",
+    "project_id": "aura-f5a95",
+    "storage_bucket": "aura-f5a95.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:431018002699:android:b9019b8b32e7cdd176ba0e",
+        "mobilesdk_app_id": "1:872426213572:android:5ef008a9ef1899daaf7991",
         "android_client_info": {
           "package_name": "aura.notification.filter"
         }
@@ -15,26 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAFA72K6looJ3Ml7LqF5mpwNor69dMR_zk"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:431018002699:android:5962455b8d60babc76ba0e",
-        "android_client_info": {
-          "package_name": "read.fast.app"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAFA72K6looJ3Ml7LqF5mpwNor69dMR_zk"
+          "current_key": "AIzaSyCQOmSNxfBJVFr57QqPJ1UDQ30xN3RXuAY"
         }
       ],
       "services": {

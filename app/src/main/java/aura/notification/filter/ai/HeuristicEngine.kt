@@ -135,7 +135,8 @@ class HeuristicEngine @Inject constructor() {
         content: String, 
         activeTagsCSV: String,
         packageName: String = "",
-        isConversation: Boolean = false
+        isConversation: Boolean = false,
+        isGroupConversation: Boolean = false
     ): Pair<Boolean, String> {
         if (activeTagsCSV.isBlank()) return false to ""
         
@@ -153,7 +154,18 @@ class HeuristicEngine @Inject constructor() {
         if (matches(TAG_EMERGENCY, emergencyPatterns)) return true to TAG_EMERGENCY
         if (matches(TAG_LOGISTICS, logisticsPatterns)) return true to TAG_LOGISTICS
 
-        // Category 2: Personal Inbox
+        // STRUCTURAL CHECK: Use Android's isGroupConversation flag (most reliable)
+        // This flag is set by the app itself (WhatsApp, Telegram, etc.) and
+        // accurately distinguishes groups from DMs regardless of group name.
+        if (isGroupConversation) {
+            if (activeTags.contains(TAG_GROUPS)) return true to TAG_GROUPS
+            // It's a group but user hasn't enabled Group Threads → fall through to block
+        } else if (isConversation) {
+            if (activeTags.contains(TAG_MESSAGES)) return true to TAG_MESSAGES
+            // It's a DM but user hasn't enabled Direct Chats → fall through to block
+        }
+
+        // Category 1: Safety & Finance (pattern-based fallback for non-messaging apps)
         if (activeTags.contains(TAG_MESSAGES)) {
              val isNoise = Regex("(?i).*(checking for|syncing|connected|status|backup).*").containsMatchIn(combined)
              if (!isNoise) {

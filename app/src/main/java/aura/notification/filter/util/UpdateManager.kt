@@ -99,6 +99,15 @@ class UpdateManager(private val activity: Activity) {
                 appUpdateInfo
             } else if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
                 Log.d(tag, "Update already in progress")
+                // RESUME LOGIC: If it's already downloading, reflect that in the UI
+                if (appUpdateInfo.installStatus() == InstallStatus.DOWNLOADING) {
+                     val bytesDownloaded = appUpdateInfo.bytesDownloaded()
+                     val totalBytes = appUpdateInfo.totalBytesToDownload()
+                     if (totalBytes > 0) {
+                         _progress.value = bytesDownloaded.toFloat() / totalBytes.toFloat()
+                     }
+                     _status.value = UpdateStatus.DOWNLOADING
+                }
                 appUpdateInfo
             } else {
                 _status.value = UpdateStatus.IDLE
@@ -131,11 +140,16 @@ class UpdateManager(private val activity: Activity) {
         return try {
             val appUpdateInfo = appUpdateManager.appUpdateInfo.await()
             val isDownloaded = appUpdateInfo.installStatus() == InstallStatus.DOWNLOADED
+            val isDownloading = appUpdateInfo.installStatus() == InstallStatus.DOWNLOADING
+
             if (isDownloaded) {
                 _status.value = UpdateStatus.DOWNLOADED
                 _progress.value = 1f
+            } else if (isDownloading) {
+                _status.value = UpdateStatus.DOWNLOADING
+                // Progress will be updated by the listener we registered in init
             }
-            isDownloaded
+            isDownloaded || isDownloading
         } catch (e: Exception) {
             Log.e(tag, "Error checking update status", e)
             false

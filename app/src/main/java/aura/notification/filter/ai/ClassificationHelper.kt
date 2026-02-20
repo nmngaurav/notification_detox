@@ -12,7 +12,7 @@ class ClassificationHelper @Inject constructor(
     private val decisionCache: DecisionCache
 ) {
 
-    suspend fun classify(title: String, content: String, packageName: String): String {
+    suspend fun classify(title: String, content: String, packageName: String, skipCache: Boolean = false): String {
         // TIER 1: Local Heuristics (<10ms) - SAFETY NET
         // We run this FIRST so that even if "Gaurav" is cached as "social", his "Emergency" message breaks through.
         if (heuristicEngine.isCritical(title, content)) {
@@ -20,21 +20,22 @@ class ClassificationHelper @Inject constructor(
              return HeuristicEngine.TAG_EMERGENCY
         }
 
-        // TIER 2: Decision Cache (<5ms)
-        // If we've seen this sender before and the heuristics didn't flag it as generic, trust the cache.
-        decisionCache.getVerdict(packageName, title)?.let {
-            // Never trust a cached emergency verdict blindly as content varies.
-            if (it == HeuristicEngine.TAG_EMERGENCY) return@let 
-            
-            Log.d("ClassificationHelper", "Cache Hit: $it for $title")
-            return it
+        // TIER 2: Decision Cache (<5ms) — skip when called for rescue to get fresh AI verdict
+        if (!skipCache) {
+            decisionCache.getVerdict(packageName, title)?.let {
+                // Never trust a cached emergency verdict blindly as content varies.
+                if (it == HeuristicEngine.TAG_EMERGENCY) return@let 
+                
+                Log.d("ClassificationHelper", "Cache Hit: $it for $title")
+                return it
+            }
         }
 
         // TIER 3: Asynchronous AI (The Judge) - IMMEDIATE CALL
         // V3 Requirement: If Tier 1 & 2 fail, do API call immediately.
         return try {
             withTimeout(3500) {
-                val category = classifyWithAI(title, content)
+                val category = classifyWithAI(title, content, packageName)
                 
                 // Only cache stable categories.
                 if (category != HeuristicEngine.TAG_EMERGENCY) {
@@ -51,32 +52,37 @@ class ClassificationHelper @Inject constructor(
 
     suspend fun summarize(packageName: String, notifications: List<String>): String {
          return try {
-             withTimeout(5000) {
-                 val limitedList = if (notifications.size > 30) {
-                     notifications.takeLast(30) + " (and ${notifications.size - 30} more...)"
+             withTimeout(8000) { // Increased timeout for longer context
+                 val limitedList = if (notifications.size > 50) {
+                     notifications.takeLast(50) + " (and ${notifications.size - 50} more...)"
                  } else {
                      notifications
                  }
 
                  val prompt = """
-                     You are a personal concierge. Summarize the SUBSTANCE of these notifications from $packageName.
-                     
-                     Rules:
-                     - Do NOT describe the general kind of talk (e.g., instead of 'They are discussing dinner', say 'Dinner planned at 8 PM at Pizza Hut').
-                     - Identify exactly WHAT is happening or being requested.
-                     - Use a direct, narrative tone. Be concise but substantive.
-                     - Use '⚡' to lead clear ACTION ITEMS.
-                     - Use 'URGENT:' only for security, money, or emergency alerts.
-                     
-                     Notifications:
+                     You are an expert personal executive assistant. These are raw notification texts from the app "$packageName".
+                     Your job is to synthesize them into a single, high-value "Briefing" for the user.
+
+                     Input Data:
                      ${limitedList.joinToString("\n") { "- $it" }}
+
+                     Instructions:
+                     1. **Context Awareness**: Understand that these are APP NOTIFICATIONS. Fragmented texts like "Hey" + "How are you?" from the same person should be grouped (e.g., "John sent 2 messages involving specific questions").
+                     2. **Relevance**: Ignore generic noise. Focus on WHO, WHAT, and ACTION.
+                     3. **Style**: Use a professional, crisp, energetic tone. No "Here is a summary". Just the intel.
+                     4. **Formatting**:
+                        - Use bolding (e.g. **OTP 1234**) for key data.
+                        - Use ⚡ for Action Items.
+                        - Use ⚠️ for Urgent alerts.
+                     5. **Output Length**: Keep it under 60 words unless there is complex data.
                  """.trimIndent()
                  
                  val request = OpenAIRequest(
                     messages = listOf(
-                        Message("system", "You are an expert personal concierge. Be brief, narrative, and highly descriptive."),
+                        Message("system", "You are an elite executive assistant application. Output concise, actionable intelligence."),
                         Message("user", prompt)
-                    )
+                    ),
+                    max_tokens = 300 // Explicitly increased to prevent cut-offs
                  )
                  
                  val response = openAIService.chatCompletion(request)
@@ -99,7 +105,7 @@ class ClassificationHelper @Inject constructor(
          }
     }
 
-    private suspend fun classifyWithAI(title: String, content: String): String {
+    private suspend fun classifyWithAI(title: String, content: String, packageName: String = ""): String {
         val prompt = """
             Classify this notification into EXACTLY ONE of these categories:
             
@@ -132,6 +138,7 @@ class ClassificationHelper @Inject constructor(
             - "promotions": Sales, coupons, promo deals.
             
             Notification:
+            App: $packageName
             Title: $title
             Content: $content
             

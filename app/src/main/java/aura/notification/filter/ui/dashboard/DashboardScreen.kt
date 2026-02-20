@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.border
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -105,25 +107,79 @@ fun DashboardScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ... (Header skipped, kept same) ...
+            // --- LIFECYCLE OBSERVER ---
+            val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+            androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                        viewModel.checkPermissions()
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose {
+                    lifecycleOwner.lifecycle.removeObserver(observer)
+                }
+            }
+
+            // --- PERMISSION BANNER ---
+            val hasNotificationAccess by viewModel.hasNotificationAccess.collectAsState()
+            if (!hasNotificationAccess) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFB00020)) // Error Red
+                        .clickable {
+                            val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                            try {
+                                navController.context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // Fallback
+                                val intent2 = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+                                navController.context.startActivity(intent2)
+                            }
+                        }
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, contentDescription = "Warning", tint = Color.White)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "Permission Revoked",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                "Aura needs access to filter notifications.",
+                                color = Color.White.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+
             // --- HEADER ---
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Aura",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-// --- Pulsating Green Dot ---
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                        Box(
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Aura",
+                            style = MaterialTheme.typography.displaySmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                        // --- Pulsating Green Dot ---
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            Box(
                             modifier = Modifier
                                 .size(8.dp)
                                 .background(Color(0xFF00E676).copy(alpha = pulseAlpha), CircleShape)
@@ -305,6 +361,7 @@ fun DashboardScreen(
 }
 
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 fun BurstCard(
     burst: NotificationBurst,
     viewModel: MainViewModel,
@@ -313,6 +370,7 @@ fun BurstCard(
     navController: NavController
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    var showClearDialog by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val appInfo = remember(burst.packageName) { viewModel.getAppInfo(burst.packageName) }
     val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
@@ -382,69 +440,6 @@ fun BurstCard(
                     )
                 }
                 
-                // ACTION: Summary Toggle
-                if (burst.size > 1) {
-                    AnimatedVisibility(visible = isExpanded || isSummaryMode) {
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSummaryMode) accentColor.copy(alpha = 0.15f) else Color.Transparent)
-                                .pulseClickable { 
-                                    viewModel.toggleSummaryForPackage(burst.packageName, burst.notifications) 
-                                }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (isSummaryMode) {
-                                Icon(
-                                    imageVector = Icons.Default.Close, 
-                                    contentDescription = "Close",
-                                    tint = accentColor,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                            }
-                            Text(
-                                text = if (isSummaryMode) "Close" else "Summary",
-                                color = accentColor,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-
-                    // --- ADDED: OPEN APP BUTTON ---
-                    Spacer(Modifier.width(8.dp))
-                    AnimatedVisibility(visible = isExpanded || isSummaryMode) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.05f))
-                                .pulseClickable { viewModel.openApp(burst.packageName, context) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.ExitToApp,
-                                    contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    "OPEN",
-                                    color = Color.Gray,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                    }
-                }
-
                 Spacer(modifier = Modifier.width(8.dp))
                 
                 // Expand Icon / Count Badge
@@ -458,6 +453,124 @@ fun BurstCard(
                     }
                 }
             }
+            
+            // --- ACTION BUTTONS ROW (separate from header) ---
+            if (burst.size > 1) {
+                AnimatedVisibility(
+                    visible = isExpanded || isSummaryMode,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(start = 52.dp, top = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Summary / Close toggle
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isSummaryMode) accentColor.copy(alpha = 0.1f) 
+                                    else Color.White.copy(alpha = 0.06f)
+                                )
+                                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                .pulseClickable { 
+                                    viewModel.toggleSummaryForPackage(burst.packageName, burst.notifications) 
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSummaryMode) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Summary",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = Color.Gray,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "SUMMARY",
+                                        color = Color.Gray,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(Modifier.width(8.dp))
+                        
+                        // Clear button
+                        if (!isSummaryMode) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White.copy(alpha = 0.06f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                    .clickable { showClearDialog = true }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteOutline,
+                                        contentDescription = null,
+                                        tint = Color.Red.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "CLEAR",
+                                        color = Color.Gray,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                            
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        
+                        // Open App button
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                .pulseClickable { viewModel.openApp(burst.packageName, context) }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.ExitToApp,
+                                    contentDescription = null,
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "OPEN",
+                                    color = Color.Gray,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             // --- EXPANDED CONTENT ---
             AnimatedVisibility(
@@ -468,50 +581,53 @@ fun BurstCard(
                 Column(modifier = Modifier.padding(top = 16.dp)) {
                     
                     if (isSummaryMode) {
-                        // PREMIUM AI Summary View
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (isExpanded) "AURA INSIGHT" else "${burst.notifications.size} MESSAGES",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Black,
-                                color = accentColor,
-                                letterSpacing = 1.sp
-                            )
-                            
-                            // Restore Summary Button (Aura Insight)
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(accentColor.copy(alpha = 0.1f))
-                                    .clickable { viewModel.toggleSummaryForPackage(burst.packageName, burst.notifications) }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = if (isExpanded) "RE-SCAN" else "SUMMARY",
-                                    color = accentColor,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
-                                )
-                            }
-                        }
+                        // AI Summary Header
+                        Text(
+                            text = if (isExpanded) "AI SUMMARY" else "${burst.notifications.size} MESSAGES",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = accentColor,
+                            letterSpacing = 1.sp
+                        )
                         
                         if (isExpanded) {
                             Spacer(Modifier.height(16.dp))
-                            if (summaryText == null || summaryText == "Thinking...") {
-                                AuraShimmer(
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
-                            } else {
-                                aura.notification.filter.ui.components.TypewriterText(
-                                    text = summaryText ?: "",
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    delayMillis = 20
-                                )
+                            // Styled Summary Box
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF1E1E1E))
+                                    .border(1.dp, accentColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                    .padding(16.dp)
+                                    .heightIn(max = 250.dp) // Prevent infinite height
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                if (summaryText == null || summaryText == "Thinking...") {
+                                    Column {
+                                        Text(
+                                            "Analysing ${burst.size} notifications...",
+                                            color = Color.Gray,
+                                            fontSize = 12.sp,
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        AuraShimmer(
+                                            modifier = Modifier.fillMaxWidth().height(12.dp)
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                        AuraShimmer(
+                                            modifier = Modifier.fillMaxWidth(0.7f).height(12.dp)
+                                        )
+                                    }
+                                } else {
+                                    aura.notification.filter.ui.components.TypewriterText(
+                                        text = summaryText ?: "",
+                                        color = Color(0xFFEEEEEE),
+                                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                                        delayMillis = 10
+                                    )
+                                }
                             }
                         } else {
                             // Collapsed State Preview: Show latest message + count indicator
@@ -530,85 +646,161 @@ fun BurstCard(
                     } else {
                         // Raw List View
                         burst.notifications.forEach { note ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                // Timeline indicator
-                                Box(
-                                    modifier = Modifier
-                                        .padding(top = 6.dp)
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(accentColor.copy(alpha = 0.3f))
+                            key(note.id) { // Important for animations
+                                val dismissState = androidx.compose.material3.rememberSwipeToDismissBoxState(
+                                    confirmValueChange = {
+                                        if (it == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart) {
+                                            viewModel.deleteNotification(note.id)
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                 Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = note.content, 
-                                            color = Color.White, 
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = 14.sp, 
-                                            lineHeight = 20.sp,
-                                            modifier = Modifier.weight(1f)
+
+                                androidx.compose.material3.SwipeToDismissBox(
+                                    state = dismissState,
+                                    enableDismissFromStartToEnd = false,
+                                    backgroundContent = {
+                                        val color by animateColorAsState(
+                                            if (dismissState.targetValue == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart) Color.Red else Color.Transparent,
+                                            label = "DismissColor"
                                         )
-                                        
-                                        // Category Tag
-                                        if (note.category.isNotEmpty()) {
-                                            Spacer(Modifier.width(8.dp))
-                                            Surface(
-                                                color = when {
-                                                    note.category.contains("Security") || note.category.contains("Emergency") || note.category.contains("Finance") -> Color.Red.copy(alpha = 0.1f)
-                                                    note.category.contains("Chats") || note.category.contains("Calls") || note.category.contains("Threads") -> Color.Cyan.copy(alpha = 0.1f)
-                                                    note.category.contains("Work") || note.category.contains("Meetings") || note.category.contains("Documents") -> Color.Magenta.copy(alpha = 0.1f)
-                                                    note.category.contains("Home") || note.category.contains("Health") || note.category.contains("Transport") -> Color.Green.copy(alpha = 0.1f)
-                                                    else -> Color.Gray.copy(alpha = 0.1f)
-                                                },
-                                                shape = RoundedCornerShape(4.dp),
-                                                modifier = Modifier.padding(bottom = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = note.category.uppercase(),
-                                                    color = when {
-                                                        note.category.contains("Security") || note.category.contains("Emergency") || note.category.contains("Finance") -> Color.Red
-                                                        note.category.contains("Chats") || note.category.contains("Calls") || note.category.contains("Threads") -> Color.Cyan
-                                                        note.category.contains("Work") || note.category.contains("Meetings") || note.category.contains("Documents") -> Color.Magenta
-                                                        note.category.contains("Home") || note.category.contains("Health") || note.category.contains("Transport") -> Color.Green
-                                                        else -> Color.LightGray
-                                                    },
-                                                    fontSize = 8.sp,
-                                                    fontWeight = FontWeight.Black,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                                )
+                                        Box(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .padding(vertical = 6.dp)
+                                                .background(color, RoundedCornerShape(8.dp))
+                                                .padding(end = 16.dp),
+                                            contentAlignment = Alignment.CenterEnd
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = Color.White
+                                            )
+                                        }
+                                    },
+                                    content = {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 6.dp)
+                                                .background(Color(0xFF151515)), // Match card bg
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            // Timeline indicator
+                                            Box(
+                                                modifier = Modifier
+                                                    .padding(top = 6.dp)
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(accentColor.copy(alpha = 0.3f))
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = note.content, 
+                                                        color = Color.White, 
+                                                        fontWeight = FontWeight.Medium,
+                                                        fontSize = 14.sp, 
+                                                        lineHeight = 20.sp,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    
+                                                    // Category Tag
+                                                    if (note.category.isNotEmpty()) {
+                                                        Spacer(Modifier.width(8.dp))
+                                                        Surface(
+                                                            color = when {
+                                                                note.category.contains("Security") || note.category.contains("Emergency") || note.category.contains("Finance") -> Color.Red.copy(alpha = 0.1f)
+                                                                note.category.contains("Chats") || note.category.contains("Calls") || note.category.contains("Threads") -> Color.Cyan.copy(alpha = 0.1f)
+                                                                note.category.contains("Work") || note.category.contains("Meetings") || note.category.contains("Documents") -> Color.Magenta.copy(alpha = 0.1f)
+                                                                note.category.contains("Home") || note.category.contains("Health") || note.category.contains("Transport") -> Color.Green.copy(alpha = 0.1f)
+                                                                else -> Color.Gray.copy(alpha = 0.1f)
+                                                            },
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            modifier = Modifier.padding(bottom = 2.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = note.category.uppercase(),
+                                                                color = when {
+                                                                    note.category.contains("Security") || note.category.contains("Emergency") || note.category.contains("Finance") -> Color.Red
+                                                                    note.category.contains("Chats") || note.category.contains("Calls") || note.category.contains("Threads") -> Color.Cyan
+                                                                    note.category.contains("Work") || note.category.contains("Meetings") || note.category.contains("Documents") -> Color.Magenta
+                                                                    note.category.contains("Home") || note.category.contains("Health") || note.category.contains("Transport") -> Color.Green
+                                                                    else -> Color.LightGray
+                                                                },
+                                                                fontSize = 8.sp,
+                                                                fontWeight = FontWeight.Black,
+                                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Spacer(Modifier.height(2.dp))
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    if (note.title.isNotEmpty()) {
+                                                        Text(
+                                                            text = note.title, 
+                                                            color = Color.Gray, 
+                                                            fontSize = 11.sp, 
+                                                            fontWeight = FontWeight.Normal
+                                                        )
+                                                    }
+                                                    Spacer(Modifier.weight(1f))
+                                                    Text(
+                                                        text = timeFormat.format(Date(note.timestamp)), 
+                                                        color = Color.DarkGray, 
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
-                                    Spacer(Modifier.height(2.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (note.title.isNotEmpty()) {
-                                            Text(
-                                                text = note.title, 
-                                                color = Color.Gray, 
-                                                fontSize = 11.sp, 
-                                                fontWeight = FontWeight.Normal
-                                            )
-                                        }
-                                        Spacer(Modifier.weight(1f))
-                                        Text(
-                                            text = timeFormat.format(Date(note.timestamp)), 
-                                            color = Color.DarkGray, 
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                }
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    // Clear Confirmation Dialog
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            containerColor = Color(0xFF1A1A1A),
+            titleContentColor = Color.White,
+            textContentColor = Color.LightGray,
+            title = {
+                Text(
+                    "Clear Notifications",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "This will permanently delete all blocked notifications for ${appInfo.label}. Do you want to continue?"
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearAppNotifications(burst.packageName)
+                        showClearDialog = false
+                    }
+                ) {
+                    Text("Clear All", color = Color.Red, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
     }
 }

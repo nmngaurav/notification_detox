@@ -24,6 +24,9 @@ interface NotificationDao {
     
     @Query("DELETE FROM notifications WHERE timestamp < :threshold")
     suspend fun deleteOldNotifications(threshold: Long)
+    @Query("DELETE FROM notifications WHERE id = :id")
+    suspend fun deleteNotification(id: Int)
+
     @Query("DELETE FROM notifications WHERE packageName = :pkgName")
     suspend fun clearNotificationsForPackage(pkgName: String)
 

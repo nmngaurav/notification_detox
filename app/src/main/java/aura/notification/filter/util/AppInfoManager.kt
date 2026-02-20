@@ -312,4 +312,10 @@ class AppInfoManager @Inject constructor(
             urgentPackages.any { pkgLower.contains(it) }
         }
     }
+
+    fun isNotificationListenerEnabled(): Boolean {
+        val componentName = android.content.ComponentName(context, aura.notification.filter.service.BlockerNotificationService::class.java)
+        val flat = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        return flat != null && flat.contains(componentName.flattenToString())
+    }
 }

@@ -5,6 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import aura.notification.filter.ai.ClassificationHelper
+import aura.notification.filter.ai.HeuristicEngine
 import aura.notification.filter.data.NotificationEntity
 import aura.notification.filter.data.NotificationRepository
 
@@ -45,6 +46,7 @@ class BlockerNotificationService : NotificationListenerService() {
         val isConversation = extras.containsKey(Notification.EXTRA_MESSAGING_PERSON) || 
                            extras.containsKey("android.isConversation") ||
                            sbn.notification.getShortcutId() != null
+        val isGroupConversation = extras.getBoolean("android.isGroupConversation", false)
 
         val content = if (isGroupSummary) {
             val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
@@ -66,6 +68,13 @@ class BlockerNotificationService : NotificationListenerService() {
                 return@launch
             }
 
+            // SAFETY NET: Critical messages (Emergency, OTP, Security) ALWAYS bypass
+            // shield regardless of user tag configuration.
+            if (heuristicEngine.isCritical(title, content)) {
+                Log.d("AuraService", "SAFETY: Critical content bypassed shield: $title")
+                return@launch
+            }
+
             val customRules = ruleEntity.customKeywords.lowercase()
             
             // TIER 1 & 2: Explicit Allowlist (Tags & Keywords)
@@ -78,7 +87,8 @@ class BlockerNotificationService : NotificationListenerService() {
                     content = content, 
                     activeTagsCSV = ruleEntity.activeCategories,
                     packageName = packageName,
-                    isConversation = isConversation
+                    isConversation = isConversation,
+                    isGroupConversation = isGroupConversation
                  )
             }
             
@@ -87,11 +97,18 @@ class BlockerNotificationService : NotificationListenerService() {
                 return@launch
             }
             
-            // TIER 3: AI Rescue
-            val aiVerdict = classifier.classify(title, content, packageName)
+            // NOTE: No special bypass for group summaries. The isGroupConversation flag
+            // is NOT set on summary notifications (only on individual MessagingStyle messages).
+            // Let summaries go through the full AI pipeline — packageName context helps
+            // the AI correctly distinguish DM summaries from group summaries.
+            // The rescue path must use fresh AI, not stale cache verdicts, to avoid
+            // cache contamination (e.g., a DM sender cached as "Group Threads").
+            val aiVerdict = classifier.classify(title, content, packageName, skipCache = true)
             val activeTags = ruleEntity.activeCategories.split(",").map { it.trim() }.toSet()
             
-            if (activeTags.contains(aiVerdict) || aiVerdict == "EMERGENCY" || aiVerdict == "SECURITY" || aiVerdict == "FINANCE") {
+            // Rescue if fresh AI verdict matches user's active tags OR is a safety category.
+            // Safe because skipCache=true guarantees this is a real-time AI classification.
+            if (activeTags.contains(aiVerdict) || aiVerdict == HeuristicEngine.TAG_EMERGENCY || aiVerdict == HeuristicEngine.TAG_SECURITY || aiVerdict == HeuristicEngine.TAG_MONEY) {
                 triggerRescueNotification(packageName, title)
                 Log.d("AuraService", "RESCUED by AI: $title ($aiVerdict)")
                 return@launch

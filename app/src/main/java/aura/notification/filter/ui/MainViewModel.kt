@@ -35,7 +35,15 @@ class MainViewModel @Inject constructor(
     private val analyticsManager: aura.notification.filter.util.AnalyticsManager
 ) : ViewModel() {
 
+    private val _hasNotificationAccess = MutableStateFlow(true) // Default to true to avoid flash
+    val hasNotificationAccess = _hasNotificationAccess.asStateFlow()
+
+    fun checkPermissions() {
+        _hasNotificationAccess.value = appInfoManager.isNotificationListenerEnabled()
+    }
+
     init {
+        checkPermissions()
         // Seed default rules on first run
         viewModelScope.launch {
             profileSeeder.seedIfNeeded()
@@ -131,6 +139,20 @@ class MainViewModel @Inject constructor(
     val summaries: Map<String, String> get() = _summaries
 
     private val _lastSummaryCounts = mutableMapOf<String, Int>()
+
+    fun deleteNotification(id: Int) {
+        viewModelScope.launch {
+            repository.deleteNotification(id)
+        }
+    }
+
+    fun clearAppNotifications(packageName: String) {
+        viewModelScope.launch {
+            repository.clearNotificationsForPackage(packageName)
+            _summaries.remove(packageName) // Clear cached summary if exists
+            _lastSummaryCounts.remove(packageName)
+        }
+    }
 
     fun toggleSummaryForPackage(packageName: String, notifications: List<NotificationEntity>) {
         val currentlyShowingSummary = _perAppViewMode[packageName] == true

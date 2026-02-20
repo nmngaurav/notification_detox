@@ -2,6 +2,10 @@ package aura.notification.filter.ui.paywall
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,8 +18,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
+
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import aura.notification.filter.R
@@ -39,7 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import android.app.Activity
 import aura.notification.filter.billing.BillingManager
-import kotlinx.coroutines.delay
+
 
 @Composable
 fun PaywallScreen(
@@ -66,9 +69,9 @@ fun PaywallScreen(
     
     var selectedTier by remember { mutableStateOf<String>("1y") }
     
-    // Soft Paywall Logic (Timer)
-    var timeLeft by remember { mutableIntStateOf(5) }
-    val isTimerDone by remember { derivedStateOf { timeLeft <= 0 } }
+    // Soft Paywall Logic (Silent circular progress over 5s)
+    val timerProgress = remember { Animatable(0f) }
+    val isTimerDone by remember { derivedStateOf { timerProgress.value >= 1f } }
     
     val isPro by billingManager.isPro.collectAsState(initial = false)
     
@@ -80,10 +83,10 @@ fun PaywallScreen(
 
     LaunchedEffect(isOnboarding) {
         if (isOnboarding) {
-            while (timeLeft > 0) {
-                delay(1000)
-                timeLeft--
-            }
+            timerProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
+            )
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
@@ -235,61 +238,64 @@ fun PaywallScreen(
                         color = Color.Gray,
                         textAlign = TextAlign.Center
                     )
+                }
 
-                    // Soft Skip / Timer UI
-                    if (isOnboarding) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        AnimatedContent(
-                            targetState = isTimerDone,
-                            transitionSpec = { fadeIn() togetherWith fadeOut() },
-                            label = "SoftSkip"
-                        ) { done ->
-                            if (done) {
-                                TextButton(
-                                    onClick = {
+                // Subtle cross icon with circular progress — top-right corner (onboarding only)
+                if (isOnboarding) {
+                    val crossAlpha by animateFloatAsState(
+                        targetValue = if (isTimerDone) 0.45f else 0.25f,
+                        animationSpec = tween(durationMillis = 400),
+                        label = "crossAlpha"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 48.dp, end = 16.dp)
+                            .size(32.dp)
+                            .then(
+                                if (isTimerDone) {
+                                    Modifier.clickable {
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         onClose()
-                                    },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            "CONTINUE TO FREE VERSION", 
-                                            color = Color.Gray, 
-                                            fontWeight = FontWeight.Bold, 
-                                            fontSize = 12.sp
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Icon(
-                                            Icons.Default.ArrowForward, 
-                                            null, 
-                                            tint = Color.Gray, 
-                                            modifier = Modifier.size(14.dp)
-                                        )
                                     }
+                                } else {
+                                    Modifier
                                 }
-                            } else {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().height(64.dp), 
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = Color(0xFFDAA520).copy(alpha = 0.5f)
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-                                    Text(
-                                        text = "Configuring your personal Aura... ${timeLeft}s",
-                                        color = Color.Gray.copy(alpha = 0.6f),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                }
-                            }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Background track circle (very subtle)
+                        Canvas(modifier = Modifier.size(28.dp)) {
+                            drawArc(
+                                color = Color.White.copy(alpha = 0.08f),
+                                startAngle = 0f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+                                size = Size(size.width, size.height)
+                            )
                         }
+
+                        // Animated progress arc filling over 5s
+                        Canvas(modifier = Modifier.size(28.dp)) {
+                            drawArc(
+                                color = Color.White.copy(alpha = 0.18f),
+                                startAngle = -90f,
+                                sweepAngle = 360f * timerProgress.value,
+                                useCenter = false,
+                                style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+                                size = Size(size.width, size.height)
+                            )
+                        }
+
+                        // Cross icon
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = if (isTimerDone) "Skip" else null,
+                            tint = Color.White.copy(alpha = crossAlpha),
+                            modifier = Modifier.size(14.dp)
+                        )
                     }
                 }
             }
